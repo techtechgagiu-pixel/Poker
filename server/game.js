@@ -1,9 +1,8 @@
 // Motorul turneului: o masa, 9 jucatori, blinduri crescatoare in timp real.
-import fs from 'node:fs';
 import { shuffledDeck, bestScore, handName } from './cards.js';
 import { decide, modelFor, llmEnabled, TIMEOUT_MS } from './bots.js';
 
-const CHARS = JSON.parse(fs.readFileSync(new URL('../characters.json', import.meta.url), 'utf8'));
+import CHARS from '../characters.json' with { type: 'json' };
 const START_STACK = +process.env.START_STACK || 1000;
 const LEVEL_MS = (+process.env.BLIND_MINUTES || 5) * 60_000;
 const SPEED = +process.env.SPEED || 1; // >1 = animatii mai rapide (pt teste)
