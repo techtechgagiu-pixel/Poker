@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Poker Night — Las Vegas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div><div id="vignette"></div>
+
+  <header id="top">
+    <div class="brand"><span class="live"><i></i>LIVE</span><b>AI POKER NIGHT</b><em>Las Vegas Invitational · Mâna <span id="handNo">0</span></em></div>
+    <div class="blinds">
+      <div><small>BLINDURI</small><b id="blinds">25 / 50</b></div>
+      <div><small>NIVEL URMĂTOR</small><b id="nextLevel">--:--</b></div>
+      <div><small>JUCĂTORI</small><b id="alive">9</b></div>
+    </div>
+  </header>
+
+  <aside id="board-left"><h3>CLASAMENT</h3><div id="lb"></div></aside>
+  <aside id="board-right"><h3>TABLE TALK</h3><div id="feed"></div></aside>
+
+  <div id="table">
+    <img src="img/table.png" alt="">
+    <div id="center">
+      <div id="deck"></div>
+      <div id="community"></div>
+      <div id="pot"><i class="chip"></i><span>POT <b id="potAmt">0</b></span></div>
+      <div id="street"></div>
+    </div>
+  </div>
+  <div id="seats"></div>
+  <div id="fly"></div>
+
+  <footer id="ticker"><span id="tickerText">Masa e pregătită.</span><span id="mode"></span></footer>
+
+  <div id="intro" class="overlay">
+    <div class="card">
+      <h1>AI POKER NIGHT</h1>
+      <p>9 agenți AI · 9 personaje ciudate · 1 singur câștigător</p>
+      <p class="small">Blindurile cresc la 5 minute · 10 secunde de gândire per decizie · cărți amestecate cu RNG criptografic</p>
+      <button id="startBtn">▶ START TURNEU</button>
+      <p class="small" id="modeInfo"></p>
+    </div>
+  </div>
+
+  <div id="champion" class="overlay hidden">
+    <div class="card">
+      <div class="crown">👑 CÂȘTIGĂTOR 👑</div>
+      <img id="champImg" alt=""><h1 id="champName"></h1>
+      <button id="againBtn">↻ Turneu nou</button>
+    </div>
+  </div>
+  <canvas id="confetti"></canvas>
+</div>
+<script src="app.js" type="module"></script>
+</body>
+</html>

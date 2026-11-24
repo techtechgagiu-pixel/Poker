@@ -1,0 +1,11 @@
+[
+ {"id":"baron","name":"Baron Von Bluff","style":"bluffer","bio":"pompous aristocrat who bluffs constantly and speaks grandly","look":"a pompous aristocrat with an enormous handlebar mustache, a monocle and a powdered wig made of playing cards"},
+ {"id":"zora","name":"Madame Zora","style":"superstitious","bio":"fortune teller who plays on hunches, omens and the stars","look":"an ancient fortune teller in a sparkling turban with a painted third eye on the forehead and crystal ball earrings"},
+ {"id":"gus","name":"Gus Goldfish","style":"loose-passive","bio":"forgetful man who calls too much and forgets what just happened","look":"a bewildered man wearing a glass fishbowl helmet with a live goldfish swimming inside"},
+ {"id":"mary","name":"Sister Mary Raise","style":"aggressive","bio":"fearless nun who raises everything and quotes scripture about luck","look":"a tattooed nun in neon pink sunglasses and a black habit with LED lights, with a mischievous grin"},
+ {"id":"odds","name":"Dr. Odds","style":"tight-mathematical","bio":"mad scientist who computes pot odds out loud and folds weak hands","look":"a mad scientist with wild white hair, thick goggles and a lab coat covered in dice"},
+ {"id":"lou","name":"Lucky Lou","style":"calling-station","bio":"old cowboy who never believes anyone and loves to call","look":"a wrinkled elderly cowboy in a sequin jacket and a huge hat decorated with horseshoes and four-leaf clovers"},
+ {"id":"chef","name":"Chef Bluffoni","style":"dramatic","bio":"melodramatic Italian chef who cooks up big bets and compares poker to pasta","look":"a very tall chef wearing a giant wheel of cheese as a hat and a spaghetti scarf"},
+ {"id":"captain","name":"Captain Chips","style":"maniac","bio":"retired pirate who goes all-in way too often and shouts nautical slang","look":"a retired pirate with an eyepatch made of a poker chip and a parrot wearing sunglasses on his shoulder"},
+ {"id":"zero","name":"Mr. Zero","style":"tight-aggressive","bio":"eerie stoic man who speaks rarely, in short cold sentences","look":"an eerily pale man in a black suit with a perfectly blank smooth face and tiny sunglasses, like a mannequin"}
+]
