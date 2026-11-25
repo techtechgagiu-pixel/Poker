@@ -114,3 +114,6 @@ function handle(m: ServerMsg) {
     case 'replaced': disconnect(); s.set({ net: { ...s.net, status: 'closed' } }); s.toast('Masa a fost deschisă în alt tab.', 'error'); break;
   }
 }
+
+// Test/diagnostic hook. Grants nothing: the server validates every message regardless of source.
+(window as any).__remiSend = (m: ClientMsg) => send(m);
