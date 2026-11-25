@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "remi-noventra",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-01-15",
+  "account_id": "098f56d02919a4483e25f22cd111e7a3",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/ws/*"]
+  },
+  "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "RemiRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RemiRoom"] }],
+  "d1_databases": [{ "binding": "DB", "database_name": "remi-production", "database_id": "abdcfbd7-17a8-4fea-8c57-7a5b81658fae", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "remi-backups" }],
+  "triggers": { "crons": ["17 3 * * *"] },
+  "observability": { "enabled": true },
+  "vars": { "ENVIRONMENT": "production", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com" },
+  "routes": [{ "pattern": "remi.noventra.ro", "custom_domain": true }],
+  "env": {
+    "staging": {
+      "name": "remi-noventra-staging",
+      "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "RemiRoom" }] },
+      "d1_databases": [{ "binding": "DB", "database_name": "remi-staging", "database_id": "2269e252-95b1-4c37-8081-afc4ace3d37a", "migrations_dir": "migrations" }],
+      "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "remi-backups" }],
+      "triggers": { "crons": [] },
+      "vars": { "ENVIRONMENT": "staging", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com" },
+      "routes": [{ "pattern": "remi-dev.noventra.ro", "custom_domain": true }]
+    }
+  }
+}
