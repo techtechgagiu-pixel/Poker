@@ -2,6 +2,7 @@
 import type { Env } from './db';
 import { logError } from './db';
 import { json } from './util';
+import { serveStatic } from './static';
 import { identify, socialApi, announceRoom } from './social';
 import { adminApi, runBackup } from './admin';
 import { ROOM_CODE_ALPHABET, isRoomCode } from '../shared/protocol';
@@ -146,7 +147,7 @@ export default {
         return stub(env, code).fetch(new Request(`https://room/ws?${url.searchParams}`, req));
       }
       if (url.pathname.startsWith('/api/')) return await api(req, env, url);
-      return env.ASSETS.fetch(req);
+      return await serveStatic(req, env, ctx);
     } catch (e: any) {
       ctx.waitUntil(logError(env, 'worker', 'unhandled', String(e?.stack ?? e)));
       return json({ error: 'server_error' }, { status: 500 });

@@ -5,7 +5,7 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   DB: D1Database;
   BACKUPS?: R2Bucket;
-  ASSETS: Fetcher;
+  STATIC: R2Bucket;
   ADMIN_EMAILS?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
