@@ -355,3 +355,28 @@ describe('bots and property-based simulation', () => {
     }), { numRuns: 40 });
   });
 });
+
+import { rigScenario, prepareStarter, SCENARIOS } from '../src/engine/scenarios';
+import { findClose } from '../src/engine/bot';
+describe('training scenarios', () => {
+  it('rig a demonstrable hand, conserve tiles, and the trainee can act', () => {
+    for (const sc of SCENARIOS) for (let seed = 1; seed < 8; seed++) {
+      const cfg = defaultConfig();
+      const g = newMatch(four(), cfg, 0);
+      prepareStarter(g, 0);
+      startRound(g, cfg, seededRng(seed * 31), 0);
+      expect(g.starter).toBe(0);
+      expect(rigScenario(g, 0, sc, seededRng(seed))).toBe(true);
+      expect(tileLocations(g).size).toBe(106);
+      expect(g.hands[0]).toHaveLength(15);
+      const v = buildView(g, cfg, 0);
+      if (sc === 'pass') expect(v.me!.canPass).toBe(true);
+      else if (sc === 'atu') expect(v.me!.canAtu).toBe(true);
+      else {
+        const c = findClose(v, cfg);
+        expect(c, `${sc} seed ${seed}`).not.toBeNull();
+        if (sc === 'closeJoker') expect(isRealJoker(c!.tile, g.joker)).toBe(true);
+      }
+    }
+  });
+});

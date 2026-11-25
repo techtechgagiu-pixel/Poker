@@ -29,6 +29,8 @@ export interface RoomView {
   gameSeatPids: (string | null)[];
   matchNo: number;
   maintenance: boolean;
+  mode: 'human' | 'bots' | 'training';
+  scenario: string | null;
   serverTime: number;
 }
 
@@ -55,6 +57,7 @@ export type ClientMsg =
   | { t: 'resumeSaved' }
   | { t: 'rematch' }
   | { t: 'hint' }
+  | { t: 'restartTraining'; scenario?: string | null }
   | { t: 'rtc'; to: string; data: unknown }
   | { t: 'media'; mic: boolean; cam: boolean }
   | { t: 'ping'; ts: number };

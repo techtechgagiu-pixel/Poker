@@ -10,6 +10,7 @@ import {
 import { buildView } from '../engine/view';
 import { decideDiscard, decideDraw, shouldDeclareAtu, thinkDelay } from '../engine/bot';
 import { computeHints } from '../engine/assistant';
+import { Scenario, SCENARIOS, prepareStarter, rigScenario } from '../engine/scenarios';
 import { secureRng } from '../engine/tiles';
 import type { ChatMsg, ClientMsg, PublicMember, RoomView, SeatSlot, ServerMsg, VoteState } from '../shared/protocol';
 import { recordMatch, type Env } from './db';
@@ -35,6 +36,7 @@ interface RoomData {
   tournament: { id: string; matchId: string } | null;
   /** tournament rooms: only these player keys may join as players */
   allowedKeys: string[] | null;
+  scenario: Scenario | null;
 }
 
 const BOT_NAMES = ['Bot Ionel', 'Bot Maria', 'Bot Vasile', 'Bot Elena', 'Bot Costel', 'Bot Ana'];
@@ -86,6 +88,7 @@ export class RemiRoom extends DurableObject<Env> {
       members: [host], seats, status: 'LOBBY', game: null, matchConfig: null, matchNo: 0, gameSeatPids: [], gameBotLevels: [],
       chat: [], chatSeq: 0, racks: {}, vote: null, pausedUntil: null, nextReady: [], botAt: null, recorded: [],
       tournament: b.tournament ?? null, allowedKeys: Array.isArray(b.allowedKeys) ? b.allowedKeys : null,
+      scenario: mode === 'training' && SCENARIOS.includes(b.scenario) ? b.scenario : null,
     };
     host.ready = true;
     await this.persist();
@@ -282,6 +285,15 @@ export class RemiRoom extends DurableObject<Env> {
         this.sys('Revanșă! Confirmați că sunteți gata.');
         return true;
       }
+      case 'restartTraining': {
+        if (r.mode !== 'training' || !isHost || !r.game || !r.matchConfig) throw new GameError('training_only');
+        if (msg.scenario !== undefined) r.scenario = SCENARIOS.includes(msg.scenario as Scenario) ? (msg.scenario as Scenario) : null;
+        const players = r.game.seats.map((x) => ({ name: x.name, isBot: x.isBot }));
+        r.game = newMatch(players, r.matchConfig, Date.now()); r.racks = {};
+        this.deal(Date.now());
+        this.sys('Antrenament repornit.');
+        return true;
+      }
       case 'hint': {
         if (!r.matchConfig?.training || !r.game) throw new GameError('hints_training_only');
         const seat = r.gameSeatPids.indexOf(m.pid);
@@ -363,7 +375,7 @@ export class RemiRoom extends DurableObject<Env> {
     const now = Date.now();
     r.game = newMatch(players, r.matchConfig, now);
     r.matchNo += 1; r.status = 'PLAYING'; r.nextReady = []; r.racks = {}; r.vote = null; r.pausedUntil = null;
-    startRound(r.game, r.matchConfig, secureRng, now);
+    this.deal(now);
     this.sys(`Partida #${r.matchNo} a început. Runda 1.`);
     return true;
   }
@@ -415,11 +427,20 @@ export class RemiRoom extends DurableObject<Env> {
     } catch (e) { console.error(JSON.stringify({ evt: 'record_failed', code: r.code, err: String(e) })); }
   }
 
+  /** Deal a round; training scenarios make the trainee start with a rigged demonstration hand. */
+  deal(now: number) {
+    const r = this.room!; const g = r.game!; const cfg = r.matchConfig!;
+    const trainee = r.gameSeatPids.findIndex((p) => !!p);
+    if (r.scenario && trainee >= 0) prepareStarter(g, trainee);
+    startRound(g, cfg, secureRng, now);
+    if (r.scenario && trainee >= 0) rigScenario(g, trainee, r.scenario, secureRng);
+  }
+
   async nextRound() {
     const r = this.room!; const g = r.game!;
     if (g.phase !== 'ROUND_RESULT') return;
     r.nextReady = []; r.racks = {};
-    startRound(g, r.matchConfig!, secureRng, Date.now());
+    this.deal(Date.now());
   }
 
   // ---------------------------------------------------------------- votes (pause / resume / save)
@@ -614,7 +635,7 @@ export class RemiRoom extends DurableObject<Env> {
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,
-      gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now };
+      gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now, mode: r.mode, scenario: r.scenario };
   }
 
   sendState(ws: WebSocket, m: Member) {
