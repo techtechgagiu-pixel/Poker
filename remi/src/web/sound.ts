@@ -63,7 +63,7 @@ export function sfx(name: Sfx) {
 export function updateAmbient() {
   const s = useStore.getState().settings;
   const v = s.mute ? 0 : s.master * s.music;
-  if (v <= 0.001) { if (ambientNode) { ambientNode.stop(); ambientNode = null; } return; }
+  if (v <= 0.001 || s.ambient === 'none' || s.musicTrack !== 'none') { if (ambientNode) { ambientNode.stop(); ambientNode = null; } return; }
   if (!ctx) return; // wait for a gesture
   if (ambientNode && (ambientNode as any).kind === s.ambient) { ambientNode.gain.gain.value = v * 0.25; return; }
   if (ambientNode) ambientNode.stop();

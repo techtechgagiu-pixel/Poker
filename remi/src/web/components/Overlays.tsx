@@ -197,8 +197,17 @@ export function SettingsForm({ compact }: { compact?: boolean }) {
       </fieldset>
       <fieldset><legend>{t('settings_audio')}</legend>
         {rng('master', 'master')}{rng('sfx', 'sfx')}{rng('music', 'music')}{rng('voice', 'voice_vol')}{rng('notif', 'notif_vol')}
-        <label>{t('music_track')} {sel('musicTrack', [['none', t('track_none')], ['piano', '🎹 ' + t('track_piano')], ['jazz', '🎷 ' + t('track_jazz')], ['guitar', '🎸 ' + t('track_guitar')], ['calm', '🌙 ' + t('track_calm')]])}</label>
-        <label>{t('ambient')} {sel('ambient', [['fire', '🔥 Șemineu'], ['waves', '🌊 Valuri'], ['rain', '🌧 Ploaie'], ['lounge', '🎹 Lounge'], ['room', '🪑 Cameră']])}</label>
+        <label>{t('background_sound')}
+          <select value={s.musicTrack !== 'none' ? 'm:' + s.musicTrack : s.ambient} onChange={(e) => { const v = e.target.value; setS(v.startsWith('m:') ? { musicTrack: v.slice(2) as any, ambient: 'none' } : { ambient: v as any, musicTrack: 'none' }); }}>
+            <option value="none">{t('sound_none')}</option>
+            <optgroup label={t('ambient')}>
+              <option value="fire">🔥 Șemineu</option><option value="waves">🌊 Valuri</option><option value="rain">🌧 Ploaie</option><option value="lounge">🎶 Lounge</option><option value="room">🪑 Cameră</option>
+            </optgroup>
+            <optgroup label={t('music_track')}>
+              <option value="m:piano">🎹 {t('track_piano')}</option><option value="m:jazz">🎷 {t('track_jazz')}</option><option value="m:calm">🌙 {t('track_calm')}</option>
+            </optgroup>
+          </select>
+        </label>
         {chk('mute', 'mute_all')}
       </fieldset>
       <fieldset><legend>{t('settings_media')}</legend>

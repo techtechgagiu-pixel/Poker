@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0 — 2026-11-26
+- **AUTO**: butonul „▶ AUTO” lasă serverul să joace turele tale (bot nivel greu) până îl apeși din nou sau muți tu o piesă; ceilalți văd eticheta AUTO.
+- **Rama-scut** pentru avatar/cameră în toate temele (aurie; argintie pe Albastru de noapte); rândurile de piese cu spatele ale adversarilor înlocuite de insigna cu numărul de piese.
+- **Un singur sunet de fundal**: o listă comună (ambianțe sau melodii), niciodată ambele deodată. Chitara a fost scoasă.
+
 ## 1.2.0 — 2026-11-26
 - **Mărire masă** (3 niveluri: Normal / Mare / Foarte mare) din Setări sau butonul 🔍 de pe bara de sus: piese mai mari (+16% / +32%), jucători, centru, teancuri, butoane și ferestre mărite; suportul trece la 11 / 9 locuri pe rând ca să încapă.
 - **Melodii generative** (originale, sintetizate, fără repetare): Pian de seară, Jazz lounge, Chitară spaniolă, Ambient calm; se pot combina cu ambianța (valuri, ploaie, foc). Pornesc din glisorul „Muzică ambientală”.

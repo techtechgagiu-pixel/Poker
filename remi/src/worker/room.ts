@@ -20,6 +20,8 @@ interface Member {
   pid: string; name: string; tokenHash: string; playerKey: string | null; registered: boolean;
   role: 'player' | 'spectator'; ready: boolean; connected: boolean; disconnectedAt: number | null; joinedAt: number;
   mic: boolean; cam: boolean; chatTimes: number[]; recentAids: string[]; pauseRequests: number;
+  /** the player asked the server to play their turns automatically */
+  autoplay?: boolean;
 }
 
 interface RoomData {
@@ -315,6 +317,12 @@ export class RemiRoom extends DurableObject<Env> {
         this.send(ws, { t: 'hints', hints: computeHints(buildView(r.game, r.matchConfig, seat), r.matchConfig) });
         return false;
       }
+      case 'autoplay': {
+        if (r.status !== 'PLAYING' || r.gameSeatPids.indexOf(m.pid) < 0) throw new GameError('not_player');
+        m.autoplay = !!msg.on; r.botAt = null;
+        this.sys(`${m.name} ${m.autoplay ? 'a pornit jocul automat (AUTO).' : 'a oprit jocul automat.'}`);
+        return true;
+      }
       case 'media': {
         const allowedMic = r.config.voice && m.role === 'player';
         const allowedCam = r.config.video && m.role === 'player';
@@ -405,6 +413,7 @@ export class RemiRoom extends DurableObject<Env> {
     const seat = r.gameSeatPids.indexOf(m.pid);
     if (seat < 0) throw new GameError('not_player');
     m.recentAids.push(msg.aid); if (m.recentAids.length > 30) m.recentAids.shift();
+    if (m.autoplay) { m.autoplay = false; this.sys(`${m.name} a oprit jocul automat.`); }
     const now = Date.now(); const a = msg.a;
     if (a.type === 'atu') declareAtu(g, cfg, seat, now);
     else if (a.type === 'draw') draw(g, cfg, seat, a.source === 'discard' ? 'discard' : 'pile', now);
@@ -422,6 +431,7 @@ export class RemiRoom extends DurableObject<Env> {
     const r = this.room!; const g = r.game!;
     if (g.phase === 'MATCH_FINISHED' && r.status === 'PLAYING') {
       r.status = 'FINISHED';
+      for (const x of r.members) x.autoplay = false;
       const w = g.winner !== null ? g.seats[g.winner].name : '-';
       this.sys(`Partida s-a încheiat. Câștigător: ${w}.`);
       await this.record();
@@ -531,6 +541,7 @@ export class RemiRoom extends DurableObject<Env> {
     if (!pid) return true;
     const m = this.member(pid);
     if (!m) return true;
+    if (m.autoplay) return true;
     const cfg = r.matchConfig!;
     return !m.connected && cfg.botTakeover && m.disconnectedAt !== null && now - m.disconnectedAt >= cfg.reconnectGraceSeconds * 1000;
   }
@@ -607,7 +618,7 @@ export class RemiRoom extends DurableObject<Env> {
     if (bot) {
       if (r.botAt !== null && now < r.botAt) return changed;
       r.botAt = null;
-      const level = ((r.gameBotLevels[s] ?? 'medium') as any);
+      const level = ((r.gameBotLevels[s] ?? (this.member(r.gameSeatPids[s])?.autoplay ? 'hard' : 'medium')) as any);
       await this.botStep(s, level, now);
       return true;
     }
@@ -653,7 +664,7 @@ export class RemiRoom extends DurableObject<Env> {
     const members: PublicMember[] = r.members.map((m) => {
       const gs = r.gameSeatPids.indexOf(m.pid);
       return { pid: m.pid, name: m.name, role: m.role, ready: m.ready, connected: m.connected, isHost: m.pid === r.hostPid, seat: seatOf(m.pid),
-        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered };
+        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered, autoplay: !!m.autoplay };
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,

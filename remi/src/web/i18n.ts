@@ -63,7 +63,7 @@ const ro = {
   opt_collect: 'Punctele pierdute de adversari se adună la cel care închide', opt_corner: 'Joc cu colț (la fiecare remiză / refacere se pun puncte deoparte)',
   opt_corner_amount: 'Puncte la colț', opt_corner_takes: 'Colțul se ia la închidere cu', opt_drawVote: 'Remiză prin vot', opt_listed: 'Apare în lista „Mese live” (spectatori)',
   menu_live: 'Mese live', live_none: 'Nicio masă live acum.', watch: 'Privește', pass_activated: 'după activarea PASS',
-  table_zoom: 'Mărire masă', zoom_1: 'Normal', zoom_2: 'Mare', zoom_3: 'Foarte mare', music_track: 'Melodie', track_none: 'Fără melodie', track_piano: 'Pian de seară', track_jazz: 'Jazz lounge', track_guitar: 'Chitară spaniolă', track_calm: 'Ambient calm',
+  autoplay_hint: 'Joc automat: serverul joacă turele tale până apeși din nou sau muți tu o piesă', background_sound: 'Sunet de fundal', sound_none: 'Fără sunet de fundal', table_zoom: 'Mărire masă', zoom_1: 'Normal', zoom_2: 'Mare', zoom_3: 'Foarte mare', music_track: 'Melodie', track_none: 'Fără melodie', track_piano: 'Pian de seară', track_jazz: 'Jazz lounge', track_guitar: 'Chitară spaniolă', track_calm: 'Ambient calm',
   q_auto: 'Auto', q_performance: 'Performanță', q_balanced: 'Echilibrat', q_ultra: 'Ultra', fps_auto: 'Nativ (auto)', fps_60: '60 FPS', fps_120: 'Până la 120 FPS',
 };
 type Dict = typeof ro;
@@ -128,7 +128,7 @@ const en: Dict = {
   opt_collect: 'Points lost by opponents go to the closing player', opt_corner: 'Play with corner (points set aside at every draw/redeal)',
   opt_corner_amount: 'Corner points', opt_corner_takes: 'Corner taken when closing with', opt_drawVote: 'Draw by vote', opt_listed: 'Listed in "Live tables" (spectators)',
   menu_live: 'Live tables', live_none: 'No live tables right now.', watch: 'Watch', pass_activated: 'after activating PASS',
-  table_zoom: 'Table size', zoom_1: 'Normal', zoom_2: 'Large', zoom_3: 'Extra large', music_track: 'Music', track_none: 'No music', track_piano: 'Evening piano', track_jazz: 'Jazz lounge', track_guitar: 'Spanish guitar', track_calm: 'Calm ambient',
+  autoplay_hint: 'Autoplay: the server plays your turns until you press again or make a move', background_sound: 'Background sound', sound_none: 'No background sound', table_zoom: 'Table size', zoom_1: 'Normal', zoom_2: 'Large', zoom_3: 'Extra large', music_track: 'Music', track_none: 'No music', track_piano: 'Evening piano', track_jazz: 'Jazz lounge', track_guitar: 'Spanish guitar', track_calm: 'Calm ambient',
   q_performance: 'Performance', q_balanced: 'Balanced', fps_auto: 'Native (auto)', fps_120: 'Up to 120 FPS',
 };
 export const dicts = { ro, en };

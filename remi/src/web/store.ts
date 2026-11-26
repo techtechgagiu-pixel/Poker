@@ -7,24 +7,28 @@ export interface Settings {
   lang: 'ro' | 'en'; theme: ThemeKey; quality: 'auto' | 'performance' | 'balanced' | 'ultra'; fps: 'auto' | '60' | '120';
   reducedMotion: boolean; highContrast: boolean; skipAnim: boolean;
   rackRows: 2 | 3; tileSize: 's' | 'm' | 'l'; tileSpacing: number; snapping: boolean;
-  master: number; music: number; sfx: number; voice: number; notif: number; mute: boolean; ambient: 'fire' | 'lounge' | 'room' | 'waves' | 'rain';
+  master: number; music: number; sfx: number; voice: number; notif: number; mute: boolean; ambient: 'none' | 'fire' | 'lounge' | 'room' | 'waves' | 'rain';
   diagnostics: boolean; pushToTalk: boolean; videoQuality: 'low' | 'balanced' | 'high'; mirror: boolean;
   micId: string; camId: string; speakerId: string; nickname: string; confirmJoker: boolean;
   /** table magnification for low vision: 1 normal, 2 large, 3 extra large */
   tableZoom: 1 | 2 | 3;
   /** generative background music (independent from the ambience texture) */
-  musicTrack: 'none' | 'piano' | 'jazz' | 'guitar' | 'calm';
+  musicTrack: 'none' | 'piano' | 'jazz' | 'calm';
 }
 export const defaultSettings: Settings = {
   lang: 'ro', theme: 'mahogany', quality: 'auto', fps: 'auto', reducedMotion: false, highContrast: false, skipAnim: false,
   rackRows: 2, tileSize: 'l', tileSpacing: 4, snapping: true,
   master: 0.8, music: 0, sfx: 0.8, voice: 1, notif: 0.7, mute: false, ambient: 'fire',
-  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true, tableZoom: 1, musicTrack: 'piano',
+  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true, tableZoom: 1, musicTrack: 'none',
 };
 function loadSettings(): Settings {
   try {
     const s = { ...defaultSettings, ...JSON.parse(localStorage.getItem('remi.settings') ?? '{}') };
     if (!localStorage.getItem('remi.tilesV2')) { s.tileSize = 'l'; localStorage.setItem('remi.tilesV2', '1'); }
+    // one background sound at a time; the guitar track was removed
+    if (!localStorage.getItem('remi.soundV2')) { s.musicTrack = 'none'; localStorage.setItem('remi.soundV2', '1'); }
+    if ((s.musicTrack as string) === 'guitar') s.musicTrack = 'none';
+    if (s.musicTrack !== 'none') s.ambient = 'none';
     if (!localStorage.getItem('remi.themeV3')) { s.theme = 'mahogany'; localStorage.setItem('remi.themeV3', '1'); }
     if (!localStorage.getItem('remi.settings') && navigator.language && !navigator.language.startsWith('ro')) s.lang = defaultSettings.lang; // Romanian is the default
     return s;

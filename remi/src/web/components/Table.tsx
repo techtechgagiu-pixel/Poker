@@ -353,7 +353,6 @@ export function GameTable() {
           if (isBottom) return null; // the local player's badge lives in the rack area below
           return (
             <div key={s.seat}>
-              {settings.theme !== 'arena' && (settings.tableZoom ?? 1) === 1 && <HiddenRack spot={sp} count={s.tiles} x={ax} y={ay} w={Wc} />}
               <div className={`seat-badge spot-${sp} ${v.current === s.seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`} style={{ left: ax, top: ay }}>
                 <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
                 <span className="star-badge" title="Runde câștigate">{s.stats.roundsWon}</span>
@@ -361,6 +360,7 @@ export function GameTable() {
                 <div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div>
                 <div className="sb-score">{s.score}</div>
                 {s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}
+                {member?.autoplay && s.status === 'ACTIVE' && <div className="sb-tag auto">AUTO</div>}
                 {member && !member.connected && s.status === 'ACTIVE' && <div className="sb-tag warn">{member.botControlled ? t('bot_controlled') : t('disconnected')}</div>}
                 {v.atuDeclaredBy.includes(s.seat) && <div className="sb-tag gold">ATU</div>}
               </div>
@@ -436,6 +436,7 @@ export function GameTable() {
                 {cfg.pass.enabled && me.canPass && <button className="btn-pass pulse" disabled={!!pending} onClick={doPass} data-nav="btn">♛ {t('btn_pass')}</button>}
                 {cfg.atu.enabled && me.canAtu && <button className="btn-gold pulse" onClick={doAtu} data-nav="btn">{t('btn_atu')}</button>}
                 <button className="btn-wood" onClick={() => setSortOpen((x) => !x)} data-nav="btn">{t('btn_sort')}</button>
+                <AutoButton />
               </div>
             </div>
           )}
@@ -485,6 +486,13 @@ function TableMenu({ v, cfg }: { v: GameView; cfg: RoomConfig }) {
   );
 }
 
+/** Let the server play my turns (strongest bot) until I press again or make a move myself. */
+function AutoButton() {
+  const t = useT();
+  const on = useStore((s) => !!s.room?.members.find((m) => m.pid === s.you?.pid)?.autoplay);
+  return <button className={`btn-auto ${on ? 'on' : ''}`} onClick={() => send({ t: 'autoplay', on: !on })} title={t('autoplay_hint')} aria-pressed={on} data-nav="btn">{on ? '⏹ AUTO' : '▶ AUTO'}</button>;
+}
+
 function MyBadge({ v, seat }: { v: GameView; seat: number }) {
   const t = useT();
   const room = useStore((s) => s.room)!;
@@ -494,7 +502,7 @@ function MyBadge({ v, seat }: { v: GameView; seat: number }) {
     <div className={`my-badge ${v.current === seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`}>
       <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
       <div><div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div><div className="sb-score">{s.score}</div>
-        {v.atuDeclaredBy.includes(seat) && <div className="sb-tag gold">ATU</div>}{s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}</div>
+        {v.atuDeclaredBy.includes(seat) && <div className="sb-tag gold">ATU</div>}{member?.autoplay && <div className="sb-tag auto">AUTO</div>}{s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}</div>
     </div>
   );
 }

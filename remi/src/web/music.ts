@@ -6,7 +6,7 @@
 import { useStore } from './store';
 import { audioOut, audioReady } from './sound';
 
-type Track = 'piano' | 'jazz' | 'guitar' | 'calm';
+type Track = 'piano' | 'jazz' | 'calm';
 const A4 = 440;
 const hz = (midi: number) => A4 * 2 ** ((midi - 69) / 12);
 const rnd = (n: number) => Math.floor(Math.random() * n);
@@ -68,18 +68,6 @@ function brush(c: AudioContext, t: number, vel = 0.2, len = 0.12) {
   const g = c.createGain(); g.gain.setValueAtTime(vel * 0.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
   s.connect(bp).connect(g).connect(o); s.start(t, Math.random() * 0.5); s.stop(t + len + 0.02);
 }
-/** Plucked string (Karplus–Strong with a feedback delay line). */
-function guitar(c: AudioContext, midi: number, t: number, vel = 0.5, ring = 2.6) {
-  const o = out(c, 0.28); const f = hz(midi);
-  const s = c.createBufferSource(); s.buffer = noise(c);
-  const exc = c.createGain(); exc.gain.setValueAtTime(vel * 0.5, t); exc.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
-  const d = c.createDelay(0.05); d.delayTime.value = 1 / f;
-  const fb = c.createGain(); fb.gain.value = 0.986; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
-  const outG = c.createGain(); outG.gain.setValueAtTime(0.6, t); outG.gain.setValueAtTime(0.6, t + ring - 0.3); outG.gain.linearRampToValueAtTime(0, t + ring);
-  s.connect(exc).connect(d); d.connect(lp).connect(fb).connect(d); d.connect(outG).connect(o);
-  s.start(t); s.stop(t + 0.04);
-  setTimeout(() => { try { fb.disconnect(); d.disconnect(); } catch { /* */ } }, (t - c.currentTime + ring + 0.2) * 1000);
-}
 function pad(c: AudioContext, midis: number[], t: number, dur: number, vel = 0.25) {
   const o = out(c, 0.45); const g = c.createGain(); g.connect(o);
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vel * 0.12, t + dur * 0.35); g.gain.linearRampToValueAtTime(0.0001, t + dur * 1.05);
@@ -125,17 +113,6 @@ function beat(c: AudioContext, t: number, spb: number) {
     brush(c, t, 0.25, 0.18); brush(c, t + spb * 0.66, 0.15, 0.08); // swung brushes
     if (b === 1 || (b === 3 && Math.random() < 0.6)) sev.slice(1).forEach((m) => epiano(c, m, t + spb * 0.66, spb * 0.6, 0.28));
     if (bar % 2 === 1 && Math.random() < 0.7) epiano(c, deg(s.key, MAJ, s.chord + s.motif[b] + 2, 1), t + (Math.random() < 0.5 ? 0 : spb * 0.66), spb, 0.33);
-  } else if (s.track === 'guitar') {
-    // Andalusian cadence in A minor-ish: i–VII–VI–V, with arpeggios and occasional rasgueado
-    const AND = [[57, 60, 64], [55, 59, 62], [53, 57, 60], [52, 56, 59]];
-    const ch = AND[bar % 4].map((m) => m + ((s.key - 60) % 5));
-    const root = ch[0] - 12;
-    if (b === 0) guitar(c, root, t, 0.6, 3);
-    if (bar % 8 === 7 && b === 0) { for (let k = 0; k < 6; k++) guitar(c, [root, ...ch, ch[0] + 12][k % 5], t + k * 0.018, 0.45, 1.6); }
-    else {
-      const pattern = [ch[0], ch[2], ch[1] + 12, ch[2]];
-      guitar(c, pattern[b] , t, 0.4); guitar(c, pattern[(b + 2) % 4] + (Math.random() < 0.2 ? 12 : 0), t + spb / 2, 0.32);
-    }
   } else {
     if (b === 0 && bar % 2 === 0) pad(c, triad(s.key, s.chord, -1).concat(triad(s.key, s.chord, 0)[1]), t, spb * 8, 0.3);
     if (Math.random() < 0.18) piano(c, deg(s.key, [0, 2, 4, 7, 9, 12, 14], rnd(7), 1), t + Math.random() * spb, spb * 4, 0.22, 0.6);
@@ -143,7 +120,7 @@ function beat(c: AudioContext, t: number, spb: number) {
   step++;
 }
 
-const TEMPO: Record<Track, number> = { piano: 72, jazz: 92, guitar: 84, calm: 54 };
+const TEMPO: Record<Track, number> = { piano: 72, jazz: 92, calm: 54 };
 
 function schedule() {
   if (!playing || !bus) return;
@@ -156,7 +133,7 @@ function level() { const s = useStore.getState().settings; return s.mute ? 0 : s
 
 export function updateMusic() {
   const s = useStore.getState().settings;
-  const want: Track | null = s.musicTrack !== 'none' && level() > 0.001 && audioReady() ? s.musicTrack : null;
+  const want: Track | null = s.musicTrack !== 'none' && (s.musicTrack as string) !== 'guitar' && level() > 0.001 && audioReady() ? s.musicTrack : null;
   if (bus) bus.gain.setTargetAtTime(level(), audioOut().ctx.currentTime, 0.3);
   if (want === playing) return;
   stop();
