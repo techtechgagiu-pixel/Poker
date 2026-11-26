@@ -58,7 +58,7 @@ const ok = (n, p, i = '') => { if (!p) fails++; console.log(`${p ? 'PASS' : 'FAI
     const good = await until(async () => { const rs = await remote(p); return rs.length === 3 && rs.every((x) => x.state === 'connected' && x.video && x.audio); }, 40000);
     ok(`Septică: player ${i + 1} sees and hears the other 3`, good, JSON.stringify((await remote(p)).map((x) => x.state[0] + (x.video ? 'V' : '-') + (x.audio ? 'A' : '-'))));
   }
-  for (const [i, p] of P.entries()) ok(`Septică: player ${i + 1}: three video frames render in the shields`, await until(async () => (await p.evaluate(() => [...document.querySelectorAll('.sept-badge video')].filter((v) => v.videoWidth > 0 && !v.paused).length)) === 3, 15000));
+  for (const [i, p] of P.entries()) ok(`Septică: player ${i + 1}: three video frames render in the shields`, await until(async () => (await p.evaluate(() => [...document.querySelectorAll('.sept-seat .sept-badge video')].filter((v) => v.videoWidth > 0 && !v.paused).length)) === 3, 15000));
   // leaving the table: a robot takes over
   await P[3].locator('.table-menu button').first().click(); P[3].once('dialog', (d) => d.accept());
   await P[3].getByRole('button', { name: /Părăsesc masa/ }).click();
