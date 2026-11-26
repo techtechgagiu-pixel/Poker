@@ -1,6 +1,7 @@
 /** Wire protocol shared by client and server. */
 import type { RoomConfig, CategoryKey } from '../engine/config';
 import type { GameView } from '../engine/view';
+import type { SepticaView, SepticaOpts } from '../engine/septica';
 
 export type SeatSlot = { kind: 'human'; pid: string } | { kind: 'bot'; level: 'easy' | 'medium' | 'hard'; name: string } | { kind: 'empty' };
 
@@ -32,6 +33,9 @@ export interface RoomView {
   maintenance: boolean;
   mode: 'human' | 'bots' | 'training';
   scenario: string | null;
+  /** card game played in this room */
+  kind?: 'remi' | 'septica';
+  septica?: SepticaOpts;
   serverTime: number;
 }
 
@@ -40,11 +44,12 @@ export type GameAction =
   | { type: 'discard'; tile: number }
   | { type: 'close'; tile: number; category?: CategoryKey }
   | { type: 'pass'; tile: number }
-  | { type: 'atu' };
+  | { type: 'atu' }
+  | { type: 'play'; card: number };
 
 export type ClientMsg =
   | { t: 'act'; aid: string; v: number; a: GameAction }
-  | { t: 'config'; config: RoomConfig }
+  | { t: 'config'; config: RoomConfig; septica?: SepticaOpts }
   | { t: 'ready'; ready: boolean }
   | { t: 'seat'; seat: number; kind: 'bot' | 'empty' | 'take' | 'leave'; level?: 'easy' | 'medium' | 'hard' }
   | { t: 'kick'; pid: string }
@@ -71,7 +76,7 @@ export interface Hint { kind: string; tiles: number[]; text: string }
 
 export type ServerMsg =
   | { t: 'room'; room: RoomView; you: { pid: string; role: 'player' | 'spectator'; seat: number | null; isHost: boolean } }
-  | { t: 'game'; view: GameView | null; rack?: (number | null)[] | null }
+  | { t: 'game'; view: GameView | SepticaView | null; rack?: (number | null)[] | null }
   | { t: 'err'; code: string; aid?: string }
   | { t: 'ack'; aid: string }
   | { t: 'rtc'; from: string; data: unknown }

@@ -518,7 +518,7 @@ function SpectatorPanel({ name, tiles }: { name?: string; tiles?: number }) {
 }
 
 /** Who is at the table: players (with status) and spectators (including the queue for a seat). */
-function PeoplePanel({ onClose }: { onClose: () => void }) {
+export function PeoplePanel({ onClose }: { onClose: () => void }) {
   const t = useT();
   const room = useStore((s) => s.room)!;
   const ref = useRef<HTMLDivElement>(null);
@@ -554,7 +554,7 @@ function DeclineBubble({ pid }: { pid: string | null }) {
 }
 
 /** Let the server play my turns (strongest bot) until I press again or make a move myself. */
-function AutoButton() {
+export function AutoButton() {
   const t = useT();
   const on = useStore((s) => !!s.room?.members.find((m) => m.pid === s.you?.pid)?.autoplay);
   return <button className={`btn-auto ${on ? 'on' : ''}`} onClick={() => send({ t: 'autoplay', on: !on })} title={t('autoplay_hint')} aria-pressed={on} data-nav="btn">{on ? '⏹ AUTO' : '▶ AUTO'}</button>;
@@ -583,14 +583,14 @@ function HiddenRack({ spot, count, x, y, w }: { spot: Spot; count: number; x: nu
   return <div className={`hidden-rack side ${spot}`} style={{ left, top: y - 170 }}>{Array.from({ length: n }, (_, i) => <div key={i} className="tile back mini-side" />)}</div>;
 }
 
-function ChatBadge() {
+export function ChatBadge() {
   const n = useStore((s) => s.room?.chat.filter((c) => c.kind !== 'system').length ?? 0);
   const [seen, setSeen] = useState(n);
   useEffect(() => { if (n < seen) setSeen(n); }, [n]);
   return n > seen ? <span className="badge" onClick={() => setSeen(n)}>{n - seen}</span> : null;
 }
 
-function MediaButtons() {
+export function MediaButtons() {
   const room = useStore((s) => s.room)!;
   const you = useStore((s) => s.you)!;
   const { micOn, camOn } = useMedia();

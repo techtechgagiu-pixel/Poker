@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { useT, errText } from '../i18n';
 import { api } from '../api';
+import { GameTabs } from '../septica/GameTabs';
 
 export function Home() {
   const t = useT();
@@ -23,6 +24,7 @@ export function Home() {
     <div className="home">
       <div className="home-bg" />
       <header className="home-head">
+        <GameTabs active="remi" />
         <div className="logo">Gagiu's <i>WorkArt</i></div>
         <div className="home-head-right">
           {profile ? <button className="chip" onClick={() => navigate('/profile')}>{profile.avatar} {profile.nickname}{notif.length ? <span className="badge">{notif.length}</span> : null}</button>

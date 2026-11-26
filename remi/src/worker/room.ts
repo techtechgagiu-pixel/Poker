@@ -8,6 +8,7 @@ import {
   GameError, GameState, activatePass, close, declareAtu, discard, draw, newMatch, pause, resume, startRound, activeSeats, canTakeDiscard, agreeDraw,
 } from '../engine/game';
 import { buildView } from '../engine/view';
+import { SepticaState, SepticaOpts, defaultSepticaOpts, sanitizeSepticaOpts, newSeptica, playCard, passTurn, autoMove, septicaView, septicaBot, SepticaError } from '../engine/septica';
 import { decideDiscard, decideDraw, shouldDeclareAtu, thinkDelay } from '../engine/bot';
 import { computeHints } from '../engine/assistant';
 import { Scenario, SCENARIOS, prepareStarter, rigScenario } from '../engine/scenarios';
@@ -49,6 +50,9 @@ interface RoomData {
   /** tournament rooms: only these player keys may join as players */
   allowedKeys: string[] | null;
   scenario: Scenario | null;
+  /** which card game this room plays (older rooms are Remi) */
+  kind?: 'remi' | 'septica';
+  septica?: SepticaOpts;
 }
 
 const BOT_NAMES = ['Bot Ionel', 'Bot Maria', 'Bot Vasile', 'Bot Elena', 'Bot Costel', 'Bot Ana'];
@@ -86,7 +90,7 @@ export class RemiRoom extends DurableObject<Env> {
         const botSeats = r.status === 'PLAYING' && r.game ? r.gameSeatPids.filter((p, k) => p === null && r.game!.seats[k].status === 'ACTIVE').length
           : r.status === 'LOBBY' ? r.seats.filter((x) => x.kind !== 'human').length : 0;
         return Response.json({ code: r.code, status: r.status, players: r.members.filter((m) => m.role === 'player').length, spectators: r.config.spectators,
-          host: r.members.find((m) => m.pid === r.hostPid)?.name ?? '', mode: r.mode, botSeats, queue: this.queue().length });
+          host: r.members.find((m) => m.pid === r.hostPid)?.name ?? '', mode: r.mode, kind: r.kind ?? 'remi', maxPlayers: r.seats.length, botSeats, queue: this.queue().length });
       }
       if (op === 'join') return Response.json(await this.join(body));
       if (op === 'stats') return Response.json(this.stats());
@@ -107,14 +111,18 @@ export class RemiRoom extends DurableObject<Env> {
     const now = Date.now();
     const token = randomToken();
     const host: Member = this.newMember(b.name, await sha256(token), b.playerKey ?? null, !!b.registered, 'player', now);
-    const seats: SeatSlot[] = [{ kind: 'human', pid: host.pid }, { kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }];
-    if (mode !== 'human') for (let i = 1; i < 4; i++) seats[i] = { kind: 'bot', level: cfg.bots.difficulty, name: BOT_NAMES[i - 1] };
+    const kind: 'remi' | 'septica' = b.kind === 'septica' ? 'septica' : 'remi';
+    const septica = kind === 'septica' ? sanitizeSepticaOpts(b.septica) : undefined;
+    const nSeats = septica ? septica.players : 4;
+    const seats: SeatSlot[] = [{ kind: 'human', pid: host.pid }];
+    for (let i = 1; i < nSeats; i++) seats.push({ kind: 'empty' });
+    if (mode !== 'human') for (let i = 1; i < nSeats; i++) seats[i] = { kind: 'bot', level: cfg.bots.difficulty, name: BOT_NAMES[i - 1] };
     this.room = {
       code: b.code, createdAt: now, lastActivity: now, hostPid: host.pid, config: cfg, mode,
       members: [host], seats, status: 'LOBBY', game: null, matchConfig: null, matchNo: 0, gameSeatPids: [], gameBotLevels: [],
       chat: [], chatSeq: 0, racks: {}, vote: null, pausedUntil: null, nextReady: [], botAt: null, recorded: [],
       tournament: b.tournament ?? null, allowedKeys: Array.isArray(b.allowedKeys) ? b.allowedKeys : null,
-      scenario: mode === 'training' && SCENARIOS.includes(b.scenario) ? b.scenario : null,
+      scenario: mode === 'training' && SCENARIOS.includes(b.scenario) ? b.scenario : null, kind, septica,
     };
     host.ready = true;
     await this.persist();
@@ -301,6 +309,7 @@ export class RemiRoom extends DurableObject<Env> {
         const c = sanitizeConfig(msg.config);
         c.training = r.mode === 'training';
         r.config = c;
+        if (r.kind === 'septica') this.resizeSeptica(sanitizeSepticaOpts((msg as any).septica ?? r.septica));
         for (const s of r.seats) if (s.kind === 'bot') s.level = c.bots.difficulty;
         for (const x of r.members) if (x.pid !== r.hostPid) x.ready = false; // rules changed: re-confirm
         return true;
@@ -378,10 +387,10 @@ export class RemiRoom extends DurableObject<Env> {
         return true;
       }
       case 'hint': {
-        if (!r.matchConfig?.training || !r.game) throw new GameError('hints_training_only');
+        if (!r.matchConfig?.training || !r.game || r.kind === 'septica') throw new GameError('hints_training_only');
         const seat = r.gameSeatPids.indexOf(m.pid);
         if (seat < 0) throw new GameError('not_player');
-        this.send(ws, { t: 'hints', hints: computeHints(buildView(r.game, r.matchConfig, seat), r.matchConfig) });
+        this.send(ws, { t: 'hints', hints: computeHints(buildView(r.game as GameState, r.matchConfig, seat), r.matchConfig) });
         return false;
       }
       case 'leaveSeat': {
@@ -470,6 +479,24 @@ export class RemiRoom extends DurableObject<Env> {
     return true;
   }
 
+  /** Septică lobby: change the number of seats (2-4). Seated people beyond the new size become spectators. */
+  resizeSeptica(o: SepticaOpts) {
+    const r = this.room!; r.septica = o;
+    while (r.seats.length < o.players) r.seats.push({ kind: 'empty' });
+    if (r.seats.length > o.players) {
+      for (const sl of r.seats.slice(o.players)) if (sl.kind === 'human') { const mm = this.member(sl.pid); if (mm) { mm.role = 'spectator'; mm.ready = false; } }
+      r.seats = r.seats.slice(0, o.players);
+    }
+    if (r.mode !== 'human') for (let i = 1; i < r.seats.length; i++) if (r.seats[i].kind === 'empty') r.seats[i] = { kind: 'bot', level: r.config.bots.difficulty, name: BOT_NAMES[i - 1] };
+  }
+
+  /** The state each viewer may see (hidden cards never leave the server). */
+  viewFor(seat: number | null) {
+    const r = this.room!;
+    if (!r.game || !r.matchConfig) return null;
+    return r.kind === 'septica' ? septicaView(r.game as unknown as SepticaState, seat) : buildView(r.game as GameState, r.matchConfig, seat);
+  }
+
   member(pid: string | null) { return pid ? this.room!.members.find((x) => x.pid === pid) : undefined; }
   humanSeatPids(): string[] {
     const r = this.room!;
@@ -504,16 +531,16 @@ export class RemiRoom extends DurableObject<Env> {
     r.gameBotLevels = filled.map((s) => (s.kind === 'bot' ? s.level : null));
     const players = filled.map((s) => (s.kind === 'human' ? { name: this.member(s.pid)!.name, isBot: false } : { name: (s as any).name, isBot: true }));
     const now = Date.now();
-    r.game = newMatch(players, r.matchConfig, now);
+    r.game = r.kind === 'septica' ? (newSeptica(players, r.septica ?? defaultSepticaOpts(), r.matchConfig.turnSeconds, secureRng, now) as unknown as GameState) : newMatch(players, r.matchConfig, now);
     r.matchNo += 1; r.status = 'PLAYING'; r.nextReady = []; r.racks = {}; r.vote = null; r.pausedUntil = null;
-    this.deal(now);
-    this.sys(`Partida #${r.matchNo} a început. Runda 1.`);
+    if (r.kind !== 'septica') this.deal(now);
+    this.sys(`Partida #${r.matchNo} a început.${r.kind === 'septica' ? '' : ' Runda 1.'}`);
     return true;
   }
 
   async gameAction(m: Member, msg: Extract<ClientMsg, { t: 'act' }>): Promise<boolean> {
     const r = this.room!;
-    const g = r.game; const cfg = r.matchConfig;
+    const g = r.game as GameState; const cfg = r.matchConfig;
     if (!g || !cfg || r.status !== 'PLAYING') throw new GameError('no_game');
     if (typeof msg.aid !== 'string' || msg.aid.length > 40) throw new GameError('bad_action');
     if (m.recentAids.includes(msg.aid)) { this.sendTo(m.pid, { t: 'ack', aid: msg.aid }); return false; } // duplicate
@@ -524,7 +551,14 @@ export class RemiRoom extends DurableObject<Env> {
     m.recentAids.push(msg.aid); if (m.recentAids.length > 30) m.recentAids.shift();
     if (m.autoplay) { m.autoplay = false; this.sys(`${m.name} a oprit jocul automat.`); }
     const now = Date.now(); const a = msg.a;
-    if (a.type === 'atu') declareAtu(g, cfg, seat, now);
+    if (r.kind === 'septica') {
+      const sg = r.game as unknown as SepticaState;
+      try {
+        if (a.type === 'play') playCard(sg, seat, Number(a.card), now);
+        else if (a.type === 'pass') passTurn(sg, seat, now);
+        else throw new GameError('bad_action');
+      } catch (e) { if (e instanceof SepticaError) throw new GameError(e.code); throw e; }
+    } else if (a.type === 'atu') declareAtu(g, cfg, seat, now);
     else if (a.type === 'draw') draw(g, cfg, seat, a.source === 'discard' ? 'discard' : 'pile', now);
     else if (a.type === 'discard') discard(g, cfg, seat, Number(a.tile), now);
     else if (a.type === 'pass') activatePass(g, cfg, seat, Number(a.tile), now);
@@ -541,7 +575,7 @@ export class RemiRoom extends DurableObject<Env> {
     if (g.phase === 'MATCH_FINISHED' && r.status === 'PLAYING') {
       r.status = 'FINISHED';
       for (const x of r.members) x.autoplay = false;
-      const w = g.winner !== null ? g.seats[g.winner].name : '-';
+      const w = g.winner !== null ? g.seats[g.winner].name : 'egalitate';
       this.sys(`Partida s-a încheiat. Câștigător: ${w}.`);
       await this.record();
     }
@@ -549,7 +583,7 @@ export class RemiRoom extends DurableObject<Env> {
 
   async record() {
     const r = this.room!;
-    if (!this.env.DB || r.recorded.includes(r.matchNo)) return;
+    if (!this.env.DB || r.recorded.includes(r.matchNo) || r.kind === 'septica') return;
     try {
       await recordMatch(this.env, {
         id: `${r.code}-${r.createdAt}-${r.matchNo}`, code: r.code, mode: r.mode, game: r.game!, config: r.matchConfig!,
@@ -591,7 +625,7 @@ export class RemiRoom extends DurableObject<Env> {
     }
     if (kind === 'resume' && g.pausedRemaining === null) throw new GameError('not_paused');
     if ((kind === 'save' || kind === 'draw') && !['WAITING_FOR_DRAW', 'WAITING_FOR_DISCARD'].includes(g.phase)) throw new GameError('bad_state');
-    if (kind === 'draw' && !cfg.drawVote) throw new GameError('draw_vote_disabled');
+    if (kind === 'draw' && (!cfg.drawVote || r.kind === 'septica')) throw new GameError('draw_vote_disabled');
     if (kind === 'draw' && g.pausedRemaining !== null) throw new GameError('paused');
     const needed = this.humanSeatPids().filter((p) => this.member(p)?.connected);
     r.vote = { kind, by: m.pid, yes: [m.pid], needed, deadline: Date.now() + cfg.pauseVote.voteSeconds * 1000 };
@@ -677,8 +711,8 @@ export class RemiRoom extends DurableObject<Env> {
           if (m && !m.connected && m.disconnectedAt && cfg.botTakeover) times.push(m.disconnectedAt + cfg.reconnectGraceSeconds * 1000);
         }
         // bots may declare atu on others' turns too (before their first turn)
-        if (cfg.atu.enabled && g.atuDeclaredBy.length === 0) {
-          for (let s = 0; s < g.seats.length; s++) if (s !== g.current && this.isBotControlled(s, now) && buildView(g, cfg, s).me?.canAtu) times.push(now + 1500);
+        if (r.kind !== 'septica' && cfg.atu.enabled && g.atuDeclaredBy.length === 0) {
+          for (let s = 0; s < g.seats.length; s++) if (s !== g.current && this.isBotControlled(s, now) && buildView(g as GameState, cfg, s).me?.canAtu) times.push(now + 1500);
         }
       }
       if (g.phase === 'ROUND_RESULT' && g.nextRoundAt) times.push(g.nextRoundAt);
@@ -713,8 +747,31 @@ export class RemiRoom extends DurableObject<Env> {
   }
 
   /** One step of automatic play. Returns true if state changed. */
+  async tickSeptica(now: number): Promise<boolean> {
+    const r = this.room!; const g = r.game as unknown as SepticaState;
+    if (g.phase !== 'WAITING_FOR_DISCARD') return false;
+    const s = g.current;
+    if (this.isBotControlled(s, now)) {
+      if (r.botAt !== null && now < r.botAt) return false;
+      r.botAt = null;
+      const level = ((r.gameBotLevels[s] ?? 'medium') as 'easy' | 'medium' | 'hard');
+      const mv = septicaBot(septicaView(g, s), level, secureRng);
+      if (mv.type === 'play') playCard(g, s, mv.card, now); else passTurn(g, s, now);
+      await this.afterGameChange();
+      return true;
+    }
+    if (g.turnDeadline && now >= g.turnDeadline) {
+      autoMove(g, s, now);
+      g.events.push({ n: ++g.eventSeq, type: 'pass', seat: s, data: { timeout: true } });
+      await this.afterGameChange();
+      return true;
+    }
+    return false;
+  }
+
   async tick(now: number): Promise<boolean> {
-    const r = this.room!; const g = r.game!; const cfg = r.matchConfig!;
+    if (this.room!.kind === 'septica') return this.tickSeptica(now);
+    const r = this.room!; const g = r.game as GameState; const cfg = r.matchConfig!;
     if (g.phase === 'ROUND_RESULT') {
       if (g.nextRoundAt && now >= g.nextRoundAt) { await this.nextRound(); return true; }
       return false;
@@ -752,7 +809,7 @@ export class RemiRoom extends DurableObject<Env> {
   }
 
   async botStep(s: number, level: 'easy' | 'medium' | 'hard', now: number) {
-    const r = this.room!; const g = r.game!; const cfg = r.matchConfig!;
+    const r = this.room!; const g = r.game as GameState; const cfg = r.matchConfig!;
     if (g.phase === 'WAITING_FOR_DRAW') {
       const src = decideDraw(buildView(g, cfg, s), cfg, level, secureRng);
       draw(g, cfg, s, src === 'discard' && canTakeDiscard(g, cfg, s) ? 'discard' : 'pile', now);
@@ -783,7 +840,7 @@ export class RemiRoom extends DurableObject<Env> {
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,
-      declines: (r.declines ?? []).filter((d) => d.until > now), gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now, mode: r.mode, scenario: r.scenario };
+      declines: (r.declines ?? []).filter((d) => d.until > now), gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now, mode: r.mode, scenario: r.scenario, kind: r.kind ?? 'remi', septica: r.septica, };
   }
 
   sendState(ws: WebSocket, m: Member) {
@@ -791,7 +848,7 @@ export class RemiRoom extends DurableObject<Env> {
     const seat = r.gameSeatPids.indexOf(m.pid);
     const room = this.roomView();
     this.send(ws, { t: 'room', room, you: { pid: m.pid, role: m.role, seat: seat >= 0 ? seat : null, isHost: r.hostPid === m.pid } });
-    const view = r.game && r.matchConfig ? buildView(r.game, r.matchConfig, seat >= 0 ? seat : null) : null;
+    const view = this.viewFor(seat >= 0 ? seat : null);
     this.send(ws, { t: 'game', view, rack: r.racks[m.pid] ?? null });
   }
 
@@ -802,7 +859,7 @@ export class RemiRoom extends DurableObject<Env> {
       const pid = this.pidOf(ws); const m = this.member(pid); if (!m) continue;
       const seat = r.gameSeatPids.indexOf(m.pid);
       this.send(ws, { t: 'room', room, you: { pid: m.pid, role: m.role, seat: seat >= 0 ? seat : null, isHost: r.hostPid === m.pid } });
-      const view = r.game && r.matchConfig ? buildView(r.game, r.matchConfig, seat >= 0 ? seat : null) : null;
+      const view = this.viewFor(seat >= 0 ? seat : null);
       this.send(ws, { t: 'game', view });
     }
   }

@@ -4,7 +4,8 @@ import type { ClientMsg, GameAction, ServerMsg } from '../shared/protocol';
 import type { GameView } from '../engine/view';
 import { errText } from './i18n';
 import { sfx } from './sound';
-import { onGameView } from './events';
+import { onGameView, onSepticaView } from './events';
+import type { SepticaView } from '../engine/septica';
 import { roomTokens } from './api';
 
 let ws: WebSocket | null = null;
@@ -142,8 +143,14 @@ function handle(m: ServerMsg) {
   switch (m.t) {
     case 'room': s.set({ room: m.room, you: m.you }); break;
     case 'game': {
+      if (m.view === null || (m.view as any).kind === 'septica') {
+        const sv = m.view as unknown as SepticaView | null;
+        if (sv) { sInflight = null; s.set({ sgame: sv, game: null }); onSepticaView(s.sgame, sv); } else s.set({ sgame: null, game: null });
+        break;
+      }
       const prev = s.game;
-      s.set({ game: m.view });
+      s.set({ game: m.view as GameView, sgame: null });
+      m.view = m.view as GameView;
       onGameView(prev, m.view, m.rack ?? null);
       // our action has been applied once the authoritative version moved past the one we sent
       if (inflight && m.view && m.view.version > inflight.v) release(inflight.aid); else flush();
@@ -172,10 +179,22 @@ function handle(m: ServerMsg) {
     case 'pong': s.set({ net: { ...useStore.getState().net, latency: Math.round(performance.now() - m.ts), serverOffset: m.server - Date.now() } }); break;
     case 'hints': s.set({ hints: m.hints }); break;
     case 'rtc': for (const h of rtcHandlers) h(m.from, m.data); break;
-    case 'kicked': if (code) roomTokens.clear(code); disconnect(); s.set({ room: null, game: null, you: null }); s.navigate('/'); s.toast('Ai fost scos din cameră.', 'error'); break;
+    case 'kicked': if (code) roomTokens.clear(code); disconnect(); s.set({ room: null, game: null, sgame: null, you: null }); s.navigate('/'); s.toast('Ai fost scos din cameră.', 'error'); break;
     case 'replaced': disconnect(); s.set({ net: { ...s.net, status: 'closed' } }); s.toast('Masa a fost deschisă în alt tab.', 'error'); break;
   }
 }
 
 // Test/diagnostic hook. Grants nothing: the server validates every message regardless of source.
 (window as any).__remiSend = (m: ClientMsg) => send(m);
+
+/** Septică: one move at a time. A second tap before the server answered is ignored (no double plays). */
+let sInflight: number | null = null;
+export function sact(a: GameAction): boolean {
+  const g = useStore.getState().sgame; if (!g) return false;
+  if (sInflight === g.version) return false;
+  const aid = `${Date.now().toString(36)}-${++aidSeq}`;
+  if (!send({ t: 'act', aid, v: g.version, a })) return false;
+  sInflight = g.version;
+  setTimeout(() => { if (sInflight === g.version) sInflight = null; }, 2500);
+  return true;
+}

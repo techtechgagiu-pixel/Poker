@@ -67,3 +67,13 @@ export async function checkAchievements() {
     for (const f of fresh.slice(0, 3)) { st.toast(`🏆 ${st.settings.lang === 'ro' ? 'Realizare deblocată' : 'Achievement unlocked'}: ${f.replace(/_/g, ' ').replace('/', ' · ')}`, 'achievement'); sfx('achievement'); }
   } catch { /* offline */ }
 }
+
+import type { SepticaView } from '../engine/septica';
+/** Sounds for Septică: card played, trick taken, my turn, game over. */
+export function onSepticaView(prev: SepticaView | null, v: SepticaView) {
+  if (!prev) return;
+  if (v.table.length > prev.table.length) sfx('discard');
+  else if (v.lastTrick && v.lastTrick.seq !== prev.lastTrick?.seq) sfx(v.lastTrick.points ? 'pass' : 'move');
+  if (v.me?.myTurn && !prev.me?.myTurn && v.phase === 'WAITING_FOR_DISCARD') sfx('turn');
+  if (v.phase === 'MATCH_FINISHED' && prev.phase !== 'MATCH_FINISHED') sfx(v.winner === v.me?.seat ? 'match' : 'win');
+}

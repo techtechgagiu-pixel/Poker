@@ -6,14 +6,16 @@ import { connect, disconnect, send } from '../net';
 import { RulesEditor } from './RulesEditor';
 import { anyCategoryEnabled, RoomConfig } from '../../engine/config';
 import { ChatPanel } from '../components/Overlays';
+import { SepticaOptions } from '../septica/SepticaOptions';
 
 const GameTable = lazy(() => import('../components/Table').then((m) => ({ default: m.GameTable })));
+const SepticaTable = lazy(() => import('../septica/SepticaTable').then((m) => ({ default: m.SepticaTable })));
 // warm the table chunk while in the lobby
 const preloadTable = () => import('../components/Table');
 
 export function RoomScreen({ code }: { code: string }) {
   const t = useT();
-  const room = useStore((s) => s.room); const game = useStore((s) => s.game); const you = useStore((s) => s.you);
+  const room = useStore((s) => s.room); const game = useStore((s) => s.game); const sgame = useStore((s) => s.sgame); const you = useStore((s) => s.you);
   const navigate = useStore((s) => s.navigate); const settings = useStore((s) => s.settings); const toast = useStore((s) => s.toast);
   const [need, setNeed] = useState<null | { info: any }>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export function RoomScreen({ code }: { code: string }) {
       // leaving the table on purpose (back button, "leave"): a robot takes the seat at once. A page reload does not run this.
       const st = useStore.getState();
       if (st.you?.role === 'player' && (st.room?.status === 'PLAYING' || st.room?.status === 'LOBBY') && send({ t: 'leaveSeat' })) roomTokens.clear(code);
-      disconnect(); import('../media').then((m) => m.stopMedia()); useStore.setState({ room: null, game: null, you: null, selected: [], hints: [] }); };
+      disconnect(); import('../media').then((m) => m.stopMedia()); useStore.setState({ room: null, game: null, sgame: null, you: null, selected: [], hints: [] }); };
   }, [code]);
   // app in the background -> a robot plays for me until I am back
   useEffect(() => {
@@ -56,6 +58,7 @@ export function RoomScreen({ code }: { code: string }) {
   if (need) return <JoinGate code={code} info={need.info} onJoined={(tok) => { roomTokens.set(code, tok); setNeed(null); connect(code, tok.token); }} />;
   if (!room || !you) return <div className="page center"><div className="spinner" /> {t('loading')}</div>;
   if (room.status === 'LOBBY') return <Lobby />;
+  if (room.kind === 'septica') return sgame ? <Suspense fallback={<div className="page center">{t('loading')}</div>}><SepticaTable /></Suspense> : <div className="page center">{t('loading')}</div>;
   if (!game) return <div className="page center">{t('loading')}</div>;
   void toast;
   return <Suspense fallback={<div className="page center">{t('loading')}</div>}><GameTable /></Suspense>;
@@ -77,7 +80,7 @@ function JoinGate({ code, info, onJoined }: { code: string; info: any; onJoined:
       <div className="logo">Gagiu's <i>WorkArt</i></div>
       <div className="card">
         <h2>{t('lobby')} {code}</h2>
-        <p>{t('host')}: <b>{info.host}</b> · {t('players')}: {info.players}/4</p>
+        <p>{t('host')}: <b>{info.host}</b> · {t('players')}: {info.players}/{info.kind === 'septica' ? info.maxPlayers ?? 4 : 4} · {info.kind === 'septica' ? 'Septică' : 'Remi'}</p>
         <label>{t('nickname')}<input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} autoFocus /></label>
         <div className="row-btns">
           <button className="btn-green big" disabled={busy || !name.trim()} onClick={() => join(false)}>{t('join')}</button>
@@ -104,7 +107,7 @@ function Lobby() {
   const humans = room.seats.filter((s) => s.kind === 'human').map((s: any) => room.members.find((m) => m.pid === s.pid)).filter(Boolean);
   const allReady = humans.every((m) => m!.ready || m!.isHost);
   const copy = async () => { try { await navigator.clipboard.writeText(link); toast(t('copied')); } catch { prompt(t('copy_link'), link); } };
-  const share = async () => { if (navigator.share) navigator.share({ title: "Remi — Gagiu's WorkArt", text: `Hai la o partidă de Remi! Cod: ${room.code}`, url: link }).catch(() => null); else copy(); };
+  const share = async () => { if (navigator.share) navigator.share({ title: `${room.kind === 'septica' ? 'Septică' : 'Remi'} — Gagiu's WorkArt`, text: `Hai la o partidă de ${room.kind === 'septica' ? 'Septică' : 'Remi'}! Cod: ${room.code}`, url: link }).catch(() => null); else copy(); };
   return (
     <div className="page lobby">
       <header className="page-head">
@@ -149,7 +152,9 @@ function Lobby() {
         </section>
         <section className="card">
           <h3>{t('rules_review')} {!you.isHost && '🔒'}</h3>
-          <RulesEditor cfg={you.isHost ? localCfg : room.config} onChange={onCfg} readOnly={!you.isHost} />
+          {room.kind === 'septica'
+            ? <SepticaOptions room={room} host={you.isHost} />
+            : <RulesEditor cfg={you.isHost ? localCfg : room.config} onChange={onCfg} readOnly={!you.isHost} />}
         </section>
       </div>
       {chat && <ChatPanel onClose={() => setChat(false)} />}

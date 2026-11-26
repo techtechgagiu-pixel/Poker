@@ -545,3 +545,69 @@ body.tile-dragging .table-root .discard-stack.drop-hot { transform: scale(calc(v
 /* controls: never overflow the column — extra buttons wrap onto a new line, two per row */
 .controls .ctl-row { flex-wrap: wrap; }
 .controls .ctl-row > button, .controls .ctl-row > .btn-auto { flex: 1 1 calc(50% - 4px); min-width: 0; }
+
+/* ===== Game tabs (top corner) ===== */
+.game-tabs { display: flex; gap: 4px; background: rgba(0,0,0,.4); border-radius: 30px; padding: 3px; border: 1px solid rgba(255,255,255,.12); }
+.game-tabs button { border: 0; background: none; color: var(--ink); font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 26px; cursor: pointer; white-space: nowrap; }
+.game-tabs button.on { background: linear-gradient(var(--gold), var(--gold-2)); color: #2a1a0f; }
+.home-head { gap: 8px; flex-wrap: wrap; }
+.sept-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; max-width: 760px; margin: 14px auto; text-align: left; }
+.sept-options { display: grid; gap: 10px; text-align: left; }
+.sept-options label { display: flex; flex-direction: column; gap: 4px; }
+.sept-options label.chk { flex-direction: row; align-items: center; gap: 8px; }
+.rules-text { text-align: left; line-height: 1.5; max-width: 760px; margin: 0 auto; }
+
+/* ===== Septică cards ===== */
+.scard { position: relative; width: 74px; height: 108px; border-radius: 9px; background: linear-gradient(#fffdf6, #ece3cc); border: 1px solid #b7a98a; box-shadow: 0 3px 8px rgba(0,0,0,.4); color: #1b1b1b; padding: 0; font-family: Georgia, serif; flex: 0 0 auto; transition: transform .15s, box-shadow .15s, filter .15s; }
+.scard.s0, .scard.s1 { color: #c62f2a; }
+.scard .c-tl, .scard .c-br { position: absolute; font-weight: 800; font-size: 20px; line-height: 1; display: flex; flex-direction: column; align-items: center; }
+.scard .c-tl { top: 6px; left: 7px; } .scard .c-br { bottom: 6px; right: 7px; transform: rotate(180deg); }
+.scard i { font-style: normal; font-size: 16px; }
+.scard .c-mid { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 46px; opacity: .92; }
+.scard.pt { box-shadow: 0 0 0 2px rgba(226,184,102,.7), 0 3px 8px rgba(0,0,0,.4); }
+.scard.back { background: repeating-linear-gradient(45deg, #7a1f2d 0 6px, #5a1420 6px 12px); border: 2px solid #e8d9b0; }
+.scard.small { width: 46px; height: 66px; border-radius: 6px; } .scard.small .c-mid { font-size: 26px; } .scard.small .c-tl { font-size: 13px; top: 3px; left: 4px; } .scard.small .c-br { display: none; }
+.scard.legal { transform: translateY(-12px); box-shadow: 0 0 0 3px var(--gold), 0 8px 16px rgba(0,0,0,.5); cursor: pointer; }
+.scard.legal:hover { transform: translateY(-20px); }
+.scard.dim { filter: brightness(.55); }
+.scard:disabled { cursor: default; }
+.scard.fresh { animation: scard-in .28s ease-out; }
+@keyframes scard-in { from { transform: translateY(-60px) scale(1.15); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ===== Septică table ===== */
+.sept-table { position: fixed; inset: 0; display: flex; flex-direction: column; background: radial-gradient(ellipse at center, var(--felt-1), var(--felt-2) 75%); color: var(--ink); overflow: hidden; }
+.sept-top { display: flex; align-items: center; gap: 10px; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left)); background: rgba(0,0,0,.3); z-index: 5; flex-wrap: wrap; }
+.sept-info { flex: 1; text-align: center; font-size: 15px; }
+.sept-tools { display: flex; gap: 6px; align-items: center; }
+.sept-felt { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.sept-seat { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 2; }
+.sept-seat.top { top: 6px; left: 50%; transform: translateX(-50%); }
+.sept-seat.left { left: 12px; top: 28%; } .sept-seat.right { right: 12px; top: 28%; }
+.sept-badge { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.4); padding: 4px 12px 4px 4px; border-radius: 40px; }
+.sept-badge .avatar { width: 62px; height: 70px; font-size: 22px; }
+.sept-badge.me .avatar { width: 72px; height: 82px; }
+.sept-badge.current .avatar, .sept-seat.current .avatar { box-shadow: 0 0 0 4px var(--gold), 0 0 24px rgba(226,184,102,.8); }
+.sept-badge .sb-name { font-weight: 700; font-size: 16px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sept-badge .sb-score { font-weight: 800; color: var(--gold); font-size: 15px; }
+.sc-time { background: var(--gold); color: #2a1a0f; font-weight: 800; border-radius: 12px; padding: 2px 8px; }
+.sback-row { display: flex; }
+.sept-centre { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.sept-pile { position: relative; width: 340px; height: 150px; display: flex; align-items: center; justify-content: center; }
+.sept-played { position: absolute; display: flex; flex-direction: column; align-items: center; transition: transform .25s; }
+.sept-played small { margin-top: 2px; font-size: 11px; opacity: .85; text-shadow: 0 1px 2px #000; }
+.sept-empty { text-align: center; opacity: .85; font-size: 15px; max-width: 280px; }
+.sept-stock { position: absolute; left: calc(50% - 250px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sept-me { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 8px max(10px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.35)); }
+.sept-hand { display: flex; justify-content: center; gap: 8px; padding-top: 22px; flex-wrap: nowrap; }
+.sept-actions { display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.sept-hint { font-weight: 700; color: var(--gold); text-shadow: 0 1px 2px #000; }
+.sept-spec { align-self: center; margin: 12px; background: rgba(0,0,0,.4); padding: 8px 16px; border-radius: 20px; }
+@media (max-width: 720px), (max-height: 520px) {
+  .scard { width: 58px; height: 84px; } .scard .c-mid { font-size: 34px; } .scard .c-tl, .scard .c-br { font-size: 16px; }
+  .scard.small { width: 34px; height: 50px; } .sept-hand { gap: 4px; }
+  .sept-pile { width: 250px; height: 120px; } .sept-stock { left: 8px; top: -60px; }
+  .sept-badge .avatar { width: 48px; height: 54px; } .sept-badge.me .avatar { width: 54px; height: 62px; }
+  .sept-seat.left, .sept-seat.right { top: 22%; } .sept-badge .sb-name { max-width: 70px; font-size: 13px; }
+  .sept-info { font-size: 12px; order: 3; flex-basis: 100%; }
+}
+@media (max-height: 520px) { .sept-seat.left, .sept-seat.right { top: 10%; } .sept-hand { padding-top: 14px; } }

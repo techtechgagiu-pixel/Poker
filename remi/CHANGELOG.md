@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.0 — 2026-11-26
+- **Septică**: new card game (2/3/4 players, optional 2v2 teams) with its own tab in the top corner, invitation codes/links,
+  rules page, bots (easy/medium/hard), spectators + queue, chat, voice and video (same WebRTC mesh as Remi).
+  Reuses the room Durable Object (`kind` field), so no migration is needed. See `RULES_SEPTICA.md`.
+
 ## 1.6.0 — 2026-11-26
 - **Ramă de foc** pe scutul jucătorului care are PASS activ.
 - **Dublu-atingere pe o piesă** o întoarce cu spatele alb (doar pe ecranul tău); încă o dublă-atingere o întoarce înapoi.

@@ -10,6 +10,8 @@ const Info = lazy(() => import('./screens/Info').then((m) => ({ default: m.Info 
 const Social = lazy(() => import('./screens/Social').then((m) => ({ default: m.Social })));
 const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
 const Live = lazy(() => import('./screens/Live').then((m) => ({ default: m.Live })));
+const SepticaHome = lazy(() => import('./septica/SepticaHome').then((m) => ({ default: m.SepticaHome })));
+const SepticaRules = lazy(() => import('./septica/SepticaHome').then((m) => ({ default: m.SepticaRules })));
 const SettingsPage = lazy(() => import('./screens/Info').then((m) => ({ default: m.SettingsPage })));
 
 (window as any).__remiStore = useStore;
@@ -38,6 +40,7 @@ export function App() {
   else if (['rules', 'howto', 'install'].includes(a)) page = <Info page={a as any} />;
   else if (a === 'settings') page = <SettingsPage />;
   else if (['profile', 'friends', 'leaderboard', 'saved', 'trophies', 'stats', 'tournaments', 'notifications'].includes(a)) page = <Social page={a as any} sub={b} />;
+  else if (a === 'septica') page = b === 'rules' ? <SepticaRules /> : <SepticaHome />;
   else if (a === 'admin') page = <Admin />;
   else if (a === 'live') page = <Live />;
   else page = <Home />;

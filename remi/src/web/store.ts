@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { GameView } from '../engine/view';
+import type { SepticaView } from '../engine/septica';
 import type { RoomView, Hint } from '../shared/protocol';
 
 export type ThemeKey = 'arena' | 'walnut' | 'mahogany' | 'black' | 'oak' | 'midnight';
@@ -46,6 +47,8 @@ interface State {
   // authoritative (server) state
   room: RoomView | null; you: { pid: string; role: 'player' | 'spectator'; seat: number | null; isHost: boolean } | null;
   game: GameView | null;
+  /** Septică table state (separate game) */
+  sgame: SepticaView | null;
   // local visual state
   selected: number[]; historySeat: number | null; hints: Hint[]; pendingAid: string | null; sortOpen: boolean; settingsOpen: boolean; chatOpen: boolean; replayKey: number;
   net: NetStats;
@@ -60,7 +63,7 @@ export const useStore = create<State>((set, get) => ({
   setSettings: (p) => { const s = { ...get().settings, ...p }; try { localStorage.setItem('remi.settings', JSON.stringify(s)); } catch { /* ignore */ } set({ settings: s }); },
   route: location.pathname,
   navigate: (to, replace) => { if (replace) history.replaceState(null, '', to); else history.pushState(null, '', to); set({ route: to }); },
-  room: null, you: null, game: null,
+  room: null, you: null, game: null, sgame: null,
   selected: [], historySeat: null, hints: [], pendingAid: null, sortOpen: false, settingsOpen: false, chatOpen: false, replayKey: 0,
   net: { status: 'idle', latency: null, reconnects: 0, lastAck: null, serverOffset: 0 },
   toasts: [],
