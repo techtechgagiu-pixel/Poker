@@ -369,6 +369,7 @@ export function GameTable() {
                 <div className="sb-score">{s.score}</div>
                 {s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}
                 {member?.autoplay && s.status === 'ACTIVE' && <div className="sb-tag auto">AUTO</div>}
+                {member?.away && s.status === 'ACTIVE' && <div className="sb-tag auto">🤖 {t('robot_plays')}</div>}
                 <DeclineBubble pid={member?.pid ?? null} />
                 {member && !member.connected && s.status === 'ACTIVE' && <div className="sb-tag warn">{member.botControlled ? t('bot_controlled') : t('disconnected')}</div>}
                 {v.atuDeclaredBy.includes(s.seat) && <div className="sb-tag gold">ATU</div>}

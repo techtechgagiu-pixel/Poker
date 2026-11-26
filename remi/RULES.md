@@ -76,6 +76,12 @@ Linkul de invitație rămâne valabil și în timpul partidei:
 - dacă nu mai e niciun loc, intră ca **spectator la coadă**; primul din coadă primește automat locul eliberat când un jucător apasă „Părăsește locul” (un bot îl ține până atunci) sau la revanșă;
 - spectatorii pot intra/ieși oricând din coadă („Vreau să joc”); locurile jucătorilor deconectați **nu** se dau altcuiva (ei au dreptul să revină).
 
+## 9c. Robot în locul celui care iese
+- Jucătorul care **iese din masă** (butonul înapoi / „Părăsește masa” / „Părăsește locul”) pierde locul: un robot îl preia imediat, cu piesele și punctajul lui. Poate reveni oricând cu linkul de invitație (ia locul unui robot).
+- Când **aplicația ajunge în fundal** (ecran stins, altă aplicație, alt tab) mai mult de ~2,5 secunde, un robot joacă în locul lui, imediat; la întoarcere își reia locul (eticheta „🤖 robot” se vede la toți).
+- La **deconectare** (internet căzut, pagină închisă) robotul preia după timpul de reconectare (implicit 8 s, setabil).
+- O reîncărcare a paginii nu îți ia locul.
+
 ## 9b. Mese live *(config `listed`, implicit DA)*
 Mesele în desfășurare apar în lista „Mese live”; oricine poate intra ca spectator (doar informații publice: scoruri, piese aruncate, Atu, PASS — niciodată piesele ascunse). Gazda poate scoate masa din listă.
 

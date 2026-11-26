@@ -92,7 +92,7 @@ export function defaultConfig(): RoomConfig {
     chat: true,
     voice: true,
     video: true,
-    reconnectGraceSeconds: 15,
+    reconnectGraceSeconds: 8,
     botTakeover: true,
     nextRoundSeconds: 8,
     confirmJokerDiscard: false,

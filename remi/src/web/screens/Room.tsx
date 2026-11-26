@@ -23,8 +23,23 @@ export function RoomScreen({ code }: { code: string }) {
     if (tok) { connect(code, tok.token); }
     else api(`/api/rooms/${code}`).then((info) => setNeed({ info })).catch((e) => setErr(e instanceof ApiError ? e.code : 'error'));
     preloadTable();
-    return () => { disconnect(); import('../media').then((m) => m.stopMedia()); useStore.setState({ room: null, game: null, you: null, selected: [], hints: [] }); };
+    return () => {
+      // leaving the table on purpose (back button, "leave"): a robot takes the seat at once. A page reload does not run this.
+      const st = useStore.getState();
+      if (st.you?.role === 'player' && (st.room?.status === 'PLAYING' || st.room?.status === 'LOBBY') && send({ t: 'leaveSeat' })) roomTokens.clear(code);
+      disconnect(); import('../media').then((m) => m.stopMedia()); useStore.setState({ room: null, game: null, you: null, selected: [], hints: [] }); };
   }, [code]);
+  // app in the background -> a robot plays for me until I am back
+  useEffect(() => {
+    if (room?.status !== 'PLAYING' || you?.role !== 'player') return;
+    let timer: number;
+    const tell = (on: boolean) => send({ t: 'away', on });
+    const vis = () => { clearTimeout(timer); if (document.visibilityState === 'hidden') timer = window.setTimeout(() => tell(true), 2500); else tell(false); };
+    const hide = () => tell(true); const show = () => tell(false);
+    document.addEventListener('visibilitychange', vis); window.addEventListener('pagehide', hide); window.addEventListener('pageshow', show);
+    const unsub = useStore.subscribe((s, p) => { if (s.net.status === 'open' && p.net.status !== 'open') tell(document.visibilityState === 'hidden'); });
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', vis); window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', show); unsub(); };
+  }, [room?.status, you?.role]);
   // the room creator in quick-play mode starts immediately
   useEffect(() => {
     if (room?.status === 'LOBBY' && you?.isHost && sessionStorage.getItem('remi.autostart') === code) { sessionStorage.removeItem('remi.autostart'); send({ t: 'start' }); }

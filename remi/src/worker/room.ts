@@ -24,6 +24,10 @@ interface Member {
   autoplay?: boolean;
   /** spectator waiting for a free seat (takes it automatically) */
   queued?: boolean; queuedAt?: number;
+  /** the app is in the background: a robot plays for them until they are back */
+  away?: boolean;
+  /** the player left the table on purpose: remove them from the room when their socket closes */
+  left?: boolean;
 }
 
 interface RoomData {
@@ -228,7 +232,7 @@ export class RemiRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(pair[1], [m.pid]);
     pair[1].serializeAttachment({ pid: m.pid });
     const wasDisconnected = !m.connected;
-    m.connected = true; m.disconnectedAt = null;
+    m.connected = true; m.disconnectedAt = null; m.away = false;
     if (m.queued) this.promoteQueue();
     if (wasDisconnected && r.status !== 'LOBBY') this.sys(`${m.name} s-a reconectat.`);
     await this.persist();
@@ -273,6 +277,7 @@ export class RemiRoom extends DurableObject<Env> {
     const others = this.ctx.getWebSockets(m.pid).filter((s) => s !== ws && s.readyState === WebSocket.OPEN);
     if (others.length) return;
     m.connected = false; m.disconnectedAt = Date.now(); m.mic = false; m.cam = false;
+    if (m.left && r.hostPid !== m.pid) r.members = r.members.filter((x) => x !== m);
     if (r.hostPid === m.pid) this.transferHost();
     await this.persist();
     this.broadcast();
@@ -381,8 +386,17 @@ export class RemiRoom extends DurableObject<Env> {
       }
       case 'leaveSeat': {
         // a player gives up their seat during the match: a bot continues it, the queue gets the chance
+        if (r.status === 'LOBBY') {
+          // leaving the lobby frees the seat (the host role passes to someone else)
+          r.seats = r.seats.map((x) => (x.kind === 'human' && x.pid === m.pid ? { kind: 'empty' } : x));
+          m.role = 'spectator'; m.ready = false; m.left = true;
+          if (r.hostPid === m.pid) this.transferHost();
+          this.promoteQueue();
+          return true;
+        }
         const g = r.game; const s = r.gameSeatPids.indexOf(m.pid);
         if (r.status !== 'PLAYING' || !g || s < 0) throw new GameError('not_player');
+        m.left = true;
         const used = r.seats.filter((x) => x.kind === 'bot').map((x: any) => x.name);
         const botName = BOT_NAMES.find((n) => !used.includes(n)) ?? 'Bot';
         r.gameSeatPids[s] = null; r.gameBotLevels[s] = r.config.bots.difficulty;
@@ -393,6 +407,15 @@ export class RemiRoom extends DurableObject<Env> {
         this.sys(`${m.name} a părăsit locul; ${botName} preia.`);
         if (r.hostPid === m.pid) { /* host keeps hosting as a spectator */ }
         this.promoteQueue();
+        return true;
+      }
+      case 'away': {
+        // the player's app went to the background / came back: a robot plays instantly while they are away
+        if (r.status !== 'PLAYING' || r.gameSeatPids.indexOf(m.pid) < 0) return false;
+        const on = !!msg.on;
+        if (!!m.away === on) return false;
+        m.away = on; r.botAt = null;
+        this.sys(on ? `${m.name} a ieșit din aplicație — robotul joacă în locul lui.` : `${m.name} s-a întors și își reia locul.`);
         return true;
       }
       case 'queue': {
@@ -633,7 +656,7 @@ export class RemiRoom extends DurableObject<Env> {
     if (!pid) return true;
     const m = this.member(pid);
     if (!m) return true;
-    if (m.autoplay) return true;
+    if (m.autoplay || m.away) return true;
     const cfg = r.matchConfig!;
     return !m.connected && cfg.botTakeover && m.disconnectedAt !== null && now - m.disconnectedAt >= cfg.reconnectGraceSeconds * 1000;
   }
@@ -756,7 +779,7 @@ export class RemiRoom extends DurableObject<Env> {
     const members: PublicMember[] = r.members.map((m) => {
       const gs = r.gameSeatPids.indexOf(m.pid);
       return { pid: m.pid, name: m.name, role: m.role, ready: m.ready, connected: m.connected, isHost: m.pid === r.hostPid, seat: seatOf(m.pid),
-        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered, autoplay: !!m.autoplay, queued: !!m.queued, queuePos: m.queued ? this.queue().indexOf(m) + 1 : 0 };
+        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered, autoplay: !!m.autoplay, away: !!m.away, queued: !!m.queued, queuePos: m.queued ? this.queue().indexOf(m) + 1 : 0 };
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 — 2026-11-26
+- Robot imediat când un jucător iese din masă sau din aplicație (fundal); reîncărcarea nu îți ia locul; reconectare implicit 8 s.
+- Camere/voce 4 jucători: roluri fixe în fiecare pereche (offerer/answerer) și linii media fixe — repară lipsa imaginii la unii jucători; TURN Cloudflare pentru rețele diferite.
+- Acțiunile se pun la coadă în loc să fie refuzate; schimb de piese când rândul e plin; „Nu vreau remiză”; lista spectatorilor; cine dă PASS închide cu joker.
+
 ## 1.4.0 — 2026-11-26
 - Linkul de invitație funcționează și după start: **înlocuiești un bot** (cu piesele și punctajul lui) sau intri ca **spectator la coadă**; locul eliberat („Părăsește locul”, revanșă) trece automat la primul din coadă.
 - Jokerul nu mai e afișat pe ecran (fără casetă, fără „J”; aranjarea automată îl tratează ca piesă normală) — indicii doar în antrenament.
