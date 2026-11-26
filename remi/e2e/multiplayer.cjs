@@ -21,7 +21,7 @@ async function newPlayer(browser, name, opts = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(BASE + '/');
-  await page.evaluate((n) => { const s = JSON.parse(localStorage.getItem('remi.settings') || '{}'); s.nickname = n; s.skipAnim = true; localStorage.setItem('remi.settings', JSON.stringify(s)); }, name);
+  await page.evaluate((n) => { const s = JSON.parse(localStorage.getItem('remi.settings') || '{}'); s.nickname = n; s.skipAnim = true; s.confirmJoker = false; localStorage.setItem('remi.settings', JSON.stringify(s)); }, name);
   return { ctx, page, frames, errors, name };
 }
 const state = (p) => p.page.evaluate(() => { const s = window.__remiStore.getState(); return { room: s.room, you: s.you, game: s.game, net: s.net }; });
@@ -47,7 +47,6 @@ async function playTurn(p) {
   // if a close exists, ask the engine-backed UI to select the winning tile, then close
   if (await close.isEnabled()) { await close.click(); await sleep(150); if (await close.isEnabled()) await close.click(); return true; }
   await p.page.locator(`.rack-tile [data-tile="${tile}"]`).click();
-  p.page.once('dialog', (d) => d.accept());
   await p.page.locator('.controls button', { hasText: /^ARUNCĂ$/ }).click();
   await waitFor(p, (s) => s.game.current !== st2.game.me.seat || s.game.phase === 'ROUND_RESULT' || s.game.phase === 'MATCH_FINISHED', 8000, 'discard');
   return true;

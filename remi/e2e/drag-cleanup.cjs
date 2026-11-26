@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const page = await ctx.newPage(); const tag = vp.isMobile ? 'mobile' : 'desktop';
       await page.goto(BASE + '/');
       const r = await page.evaluate(async () => {
-        localStorage.setItem('remi.settings', JSON.stringify({ nickname: 'Drag', skipAnim: true }));
+        localStorage.setItem('remi.settings', JSON.stringify({ nickname: 'Drag', skipAnim: true, confirmJoker: false }));
         const d = await (await fetch('/api/config/defaults')).json();
         return (await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', 'x-guest': 'drag-' + Date.now() }, body: JSON.stringify({ name: 'Drag', mode: 'training', config: { ...d.config, turnSeconds: 0 } }) })).json();
       });
