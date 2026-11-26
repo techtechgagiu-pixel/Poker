@@ -1,6 +1,7 @@
 /** WebSocket client: exponential backoff reconnect, latency pings, deduplicated actions with server ack. */
 import { useStore } from './store';
 import type { ClientMsg, GameAction, ServerMsg } from '../shared/protocol';
+import type { GameView } from '../engine/view';
 import { errText } from './i18n';
 import { sfx } from './sound';
 import { onGameView } from './events';
@@ -73,17 +74,67 @@ export function send(m: ClientMsg): boolean {
 }
 
 let aidSeq = 0;
-/** Send a game action once; ignores repeats while one is in flight (double click / latency). */
-export function act(a: GameAction): boolean {
+/** The action currently waiting for the server, and the actions the player already asked for meanwhile. */
+let inflight: { aid: string; v: number; a: GameAction; retried: boolean } | null = null;
+const queue: { a: GameAction; retried: boolean }[] = [];
+
+/** True while a draw is travelling to the server: a discard asked for now is queued, not refused. */
+export function drawInFlight() { return !!inflight && inflight.a.type === 'draw'; }
+
+/** Is a (queued) action still legal on the freshest authoritative view? Illegal ones are dropped silently. */
+function stillValid(a: GameAction, g: GameView): boolean {
+  const me = g.me; if (!me || g.paused) return false;
+  if (a.type === 'atu') return me.canAtu;
+  if (g.current !== me.seat) return false;
+  switch (a.type) {
+    case 'draw': return g.phase === 'WAITING_FOR_DRAW' && (a.source === 'pile' ? g.pile > 0 : me.canTakeDiscard);
+    case 'discard': case 'close': return g.phase === 'WAITING_FOR_DISCARD' && me.hand.includes(a.tile);
+    case 'pass': return g.phase === 'WAITING_FOR_DISCARD' && me.canPass && me.hand.includes(a.tile);
+  }
+  return false;
+}
+
+function sendNow(a: GameAction, retried = false): boolean {
   const s = useStore.getState();
-  if (s.pendingAid || !s.game) return false;
+  if (!s.game) return false;
   const aid = `${Date.now().toString(36)}-${++aidSeq}`;
   if (!send({ t: 'act', aid, v: s.game.version, a })) { s.toast(errText('offline', s.settings.lang), 'error'); return false; }
+  inflight = { aid, v: s.game.version, a, retried };
   s.set({ pendingAid: aid });
   (window as any).__actSent = performance.now();
   // safety valve: never lock the UI for long
-  setTimeout(() => { if (useStore.getState().pendingAid === aid) useStore.setState({ pendingAid: null }); }, 4000);
+  setTimeout(() => { if (useStore.getState().pendingAid === aid) release(aid); }, 4000);
   return true;
+}
+
+/** The server answered (or we gave up): free the slot and send the next queued action, if any. */
+function release(aid?: string) {
+  if (aid && inflight && inflight.aid !== aid) return;
+  inflight = null;
+  useStore.setState({ pendingAid: null });
+  flush();
+}
+function flush() {
+  const s = useStore.getState();
+  if (inflight || !s.game) return;
+  while (queue.length) {
+    const q = queue.shift()!;
+    if (stillValid(q.a, s.game)) { sendNow(q.a, q.retried); return; }
+  }
+}
+
+/**
+ * Send a game action. If another is still travelling, the new one is queued (not refused) and goes out
+ * automatically the moment the server confirms — so a quick draw -> discard never needs a pause.
+ */
+export function act(a: GameAction): boolean {
+  const s = useStore.getState();
+  if (!s.game) return false;
+  if (inflight) {
+    if (!queue.some((q) => JSON.stringify(q.a) === JSON.stringify(a)) && queue.length < 4) queue.push({ a, retried: false });
+    return true;
+  }
+  return sendNow(a);
 }
 
 function handle(m: ServerMsg) {
@@ -92,18 +143,29 @@ function handle(m: ServerMsg) {
     case 'room': s.set({ room: m.room, you: m.you }); break;
     case 'game': {
       const prev = s.game;
-      s.set({ game: m.view, pendingAid: m.view && prev && m.view.version !== prev.version ? null : s.pendingAid });
+      s.set({ game: m.view });
       onGameView(prev, m.view, m.rack ?? null);
+      // our action has been applied once the authoritative version moved past the one we sent
+      if (inflight && m.view && m.view.version > inflight.v) release(inflight.aid); else flush();
       break;
     }
     case 'ack': {
       const t0 = (window as any).__actSent;
       if (t0) s.set({ net: { ...useStore.getState().net, lastAck: Math.round(performance.now() - t0) } });
-      if (s.pendingAid === m.aid) s.set({ pendingAid: null });
+      // the new view normally follows within milliseconds; if it does not, do not hold the player up
+      { const id = m.aid; setTimeout(() => { if (inflight?.aid === id) release(id); }, 200); }
       break;
     }
     case 'err': {
-      s.set({ pendingAid: null });
+      const lost = inflight;
+      inflight = null; s.set({ pendingAid: null });
+      if (m.code === 'stale_state' && lost && !lost.retried) {
+        // the table moved on while the request travelled: re-check against the fresh state (sent right after this
+        // message) and resend once — no error shown, no second try needed from the player
+        queue.unshift({ a: lost.a, retried: true });
+        break;
+      }
+      queue.length = 0;
       s.toast(errText(m.code, s.settings.lang), 'error'); sfx('error');
       break;
     }

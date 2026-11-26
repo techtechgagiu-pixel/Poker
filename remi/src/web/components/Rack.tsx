@@ -43,7 +43,8 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
   const pos = (i: number) => ({ x: pad + (i % cols) * (tw + gap), y: pad + Math.floor(i / cols) * (th + 10) });
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; from: number; sx: number; sy: number; el: HTMLElement; moved: boolean; pid: number; raf: number; px: number; py: number } | null>(null);
-  const slots = useMemo(() => layout.map((id, i) => ({ id, i })), [layout]);
+  // rendered in tile-id order, so the browser never has to move DOM nodes while a finger is down
+  const slots = useMemo(() => layout.map((id, i) => ({ id, i })).filter((x) => x.id !== null).sort((a, b) => (a.id as number) - (b.id as number)), [layout]);
 
   const slotAt = (clientX: number, clientY: number): number | null => {
     const r = ref.current!.getBoundingClientRect(); const s = scale();
@@ -92,7 +93,7 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) { d.moved = true; d.el.classList.add('dragging'); document.body.classList.add('tile-dragging'); }
     if (d.moved && !d.raf) d.raf = requestAnimationFrame((ts) => {
       d.raf = 0;
-      if (fpsCap60 && ts - lastWrite < 15) { d.raf = requestAnimationFrame(() => { d.raf = 0; onMove(e); }); return; }
+      if (fpsCap60 && ts - lastWrite < 15) { d.raf = requestAnimationFrame(() => { d.raf = 0; const s2 = scale(); const p2 = pos(d.from); d.el.style.transform = `translate3d(${p2.x + (d.px - d.sx) / s2}px, ${p2.y + (d.py - d.sy) / s2 - 6}px, 0) scale(1.06)`; }); return; }
       lastWrite = ts;
       const s = scale(); const p = pos(d.from);
       d.el.style.transform = `translate3d(${p.x + (d.px - d.sx) / s}px, ${p.y + (d.py - d.sy) / s - 6}px, 0) scale(1.06)`;
@@ -166,7 +167,7 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
 
   return (
     <div className="rack-wrap" style={{ width: width + 36 }}>
-      <div className="rack" ref={ref} style={{ width, height }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onLost}>
+      <div className="rack" ref={ref} style={{ width, height }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => cancelDrag()} onLostPointerCapture={onLost}>
         {Array.from({ length: rows }, (_, r) => <div key={r} className="rack-ledge" style={{ top: pad + r * (th + 10) + th - 4 }} />)}
         {focusIndex !== null && <div className="rack-focus" style={{ transform: `translate3d(${pos(focusIndex).x - 4}px, ${pos(focusIndex).y - 4}px,0)`, width: tw + 8, height: th + 8 }} />}
         {slots.map(({ id, i }) => id === null ? null : (

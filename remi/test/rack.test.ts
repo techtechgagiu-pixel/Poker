@@ -18,6 +18,12 @@ describe('rack insertion', () => {
     // drag 5 after 7 (right half of 7 -> index 4)
     expect(insertTiles(row('_,5,6,7,_,_,_,_'), C, [5], 4)).toEqual(row('_,_,6,7,5,_,_,_'));
   });
+  it('nearest gap wins: a gap on the left is used instead of pushing a long run right', () => {
+    const l = row('_,1,2,3,4,5,6,_,_,_,_,_,_,_,_,_');
+    // drop X between 1 and 2 (index 2): gap left is 1 step away (index 0 is 2 away; right gap at 7 is 5 away)
+    const out = insertTiles(l.concat([]).map((x, i) => (i === 10 ? 9 : x)), 16, [9], 2);
+    expect(out.slice(0, 8)).toEqual([1, 9, 2, 3, 4, 5, 6, null]);
+  });
   it('no gap on the right: neighbours slide left', () => {
     const l = row('_,1,2,3,4,5,7,8');
     expect(insertTiles(l, C, [6], 6)).toEqual(row('1,2,3,4,5,6,7,8'));
@@ -25,11 +31,12 @@ describe('rack insertion', () => {
   it('empty slot: just place', () => {
     expect(insertTiles(row('1,_,3,_,_,_,_,_'), C, [2], 1)).toEqual(row('1,2,3,_,_,_,_,_'));
   });
-  it('never crosses into the next row; full row overflows to a free slot', () => {
+  it('never crosses into the next row; a full row swaps and keeps every tile', () => {
     const l = row('1,2,3,4,5,6,7,8,_,_,_,_,_,_,_,_');
-    const out = insertTiles(l, C, [9], 3);
-    expect(out.slice(0, 8)).toEqual(row('1,2,3,4,5,6,7,8'));
-    expect(out).toContain(9);
+    const out = insertTiles(l.concat([]).map((x, i) => (i === 10 ? 9 : x)), 8, [9], 3);
+    expect(out.slice(0, 8)).toEqual([1, 2, 3, 9, 5, 6, 7, 8]);
+    expect(out.indexOf(4)).toBe(10); // 4 took the slot 9 came from
+    expect(out.filter((x) => x !== null).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
   it('multi-tile group inserted in order', () => {
     expect(insertTiles(row('3,7,_,_,_,_,_,_,4,5,6,_,_,_,_,_'), C, [4, 5, 6], 1)).toEqual(row('3,4,5,6,7,_,_,_,_,_,_,_,_,_,_,_'));

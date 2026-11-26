@@ -2,11 +2,12 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useStore, useMedia } from '../store';
 import { useRack, arrange, arrangeJoker, pendingDrop, colsFor, ZOOM_UI, reshape } from '../rack';
 import { useT } from '../i18n';
-import { act, send } from '../net';
+import { act, send, drawInFlight } from '../net';
 import { Tile, COLOR_SYMBOL } from './Tile';
 import { Rack, moveTiles, rackHit, meAreaHeight } from './Rack';
 import { isRealJoker, tileFace } from '../../engine/tiles';
 import { findClose } from '../../engine/bot';
+import { passActivatorMustJoker } from '../../engine/game';
 import { detectWins, chooseWin } from '../../engine/validator';
 import type { GameView } from '../../engine/view';
 import type { RoomConfig } from '../../engine/config';
@@ -186,6 +187,7 @@ export function GameTable() {
   const fit = useFit(canvas);
   const [sortOpen, setSortOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fs, setFs] = useState(!!document.fullscreenElement);
   const [focus, setFocus] = useState<number | null>(null);
@@ -198,7 +200,7 @@ export function GameTable() {
   const myTurn = !!me && v.current === me.seat && !v.paused && room.status === 'PLAYING';
   const canDraw = myTurn && v.phase === 'WAITING_FOR_DRAW' && !pending;
   const canTake = !!me?.canTakeDiscard && !pending && !v.paused;
-  const canDiscard = myTurn && v.phase === 'WAITING_FOR_DISCARD' && !pending;
+  const canDiscard = myTurn && ((v.phase === 'WAITING_FOR_DISCARD' && !pending) || (v.phase === 'WAITING_FOR_DRAW' && !!pending && drawInFlight()));
   const handKey = me?.hand.join(',') ?? '';
   const winning = useMemo(() => (me && me.hand.length === 15 ? findClose(v, cfg) : null), [handKey, v.joker, cfg]);
   const selTile = selected.length === 1 ? selected[0] : null;
@@ -207,6 +209,7 @@ export function GameTable() {
     const rest = me.hand.filter((x) => x !== selTile);
     const jd = isRealJoker(selTile, v.joker);
     if (jd && !cfg.closeByJokerDiscard) return null;
+    if (passActivatorMustJoker(cfg, v.pass.by, me.seat) && !jd) return null;
     return chooseWin(detectWins(rest, v.joker, cfg), jd, rest, v.joker, cfg);
   }, [handKey, selTile]);
   const hintTiles = useMemo(() => new Set(hints.flatMap((h) => (['close', 'discard'].includes(h.kind) ? h.tiles : []))), [hints]);
@@ -215,7 +218,7 @@ export function GameTable() {
   const doDiscard = useCallback((tile: number | null) => {
     if (tile === null) { toast(t('select_tile')); return false; }
     if (!canDiscard) { toast(!myTurn ? t('not_your_turn_msg') : v.phase === 'WAITING_FOR_DRAW' ? t('draw_first') : t('select_tile')); return false; }
-    if (isRealJoker(tile, v.joker) && settings.confirmJoker && cfg.confirmJokerDiscard && !confirm(t('confirm_joker'))) return false;
+    if (isRealJoker(tile, v.joker) && false) return false;
     const sent = act({ type: 'discard', tile }); set({ selected: [] }); return sent;
   }, [canDiscard, v.joker, settings.confirmJoker]);
   const doClose = () => {
@@ -341,8 +344,8 @@ export function GameTable() {
             <LastMoveButton v={v} />
             <MediaButtons />
             {cfg.chat && <button className="tb-btn" data-toggle="chat" onClick={() => setChatOpen((x) => !x)} aria-label={t('chat')} data-nav="btn">💬<ChatBadge /></button>}
-            <span className="tb-pill" title={t('players')}>👥 {room.members.filter((m) => m.role === 'player').length}</span>
-            <span className="tb-pill" title={t('spectators')}>👁 {room.members.filter((m) => m.role === 'spectator').length}</span>
+            <button className="tb-pill btn" data-toggle="people" onClick={() => setPeopleOpen((x) => !x)} title={t('players')} aria-label={t('players')}>👥 {room.members.filter((m) => m.role === 'player').length}</button>
+            <button className="tb-pill btn" data-toggle="people" onClick={() => setPeopleOpen((x) => !x)} title={t('spectators')} aria-label={t('spectators')}>👁 {room.members.filter((m) => m.role === 'spectator').length}</button>
             <button className="tb-btn gold zoom-btn" onClick={() => { const z = ((settings.tableZoom ?? 1) % 3 + 1) as 1 | 2 | 3; useStore.getState().setSettings({ tableZoom: z }); useRack.setState({ layout: reshape(useRack.getState().layout, settings.rackRows) }); }} title={t('table_zoom')} aria-label={t('table_zoom')} data-nav="btn">🔍<small>{settings.tableZoom ?? 1}</small></button>
             <button className="tb-btn gold" onClick={toggleFs} aria-label={t('fullscreen')} title={t('fullscreen')} data-nav="btn">{fs ? <IconMin /> : <IconMax />}</button>
             <button className="tb-btn" data-toggle="settings" onClick={() => setSettingsOpen((x) => !x)} aria-label={t('btn_settings')} data-nav="btn">⚙</button>
@@ -366,6 +369,7 @@ export function GameTable() {
                 <div className="sb-score">{s.score}</div>
                 {s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}
                 {member?.autoplay && s.status === 'ACTIVE' && <div className="sb-tag auto">AUTO</div>}
+                <DeclineBubble pid={member?.pid ?? null} />
                 {member && !member.connected && s.status === 'ACTIVE' && <div className="sb-tag warn">{member.botControlled ? t('bot_controlled') : t('disconnected')}</div>}
                 {v.atuDeclaredBy.includes(s.seat) && <div className="sb-tag gold">ATU</div>}
               </div>
@@ -465,6 +469,7 @@ export function GameTable() {
         {v.phase === 'MATCH_FINISHED' && <MatchResult />}
         <VoteDialog />
         {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+        {peopleOpen && <PeoplePanel onClose={() => setPeopleOpen(false)} />}
         {settingsOpen && <SettingsDrawer onClose={() => setSettingsOpen(false)} />}
       </div>
       {settings.diagnostics && <Diagnostics />}
@@ -510,6 +515,42 @@ function SpectatorPanel({ name, tiles }: { name?: string; tiles?: number }) {
   );
 }
 
+/** Who is at the table: players (with status) and spectators (including the queue for a seat). */
+function PeoplePanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const room = useStore((s) => s.room)!;
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, onClose, '[data-toggle="people"]');
+  const players = room.members.filter((m) => m.role === 'player');
+  const specs = room.members.filter((m) => m.role === 'spectator').sort((a, b) => Number(b.queued) - Number(a.queued) || a.queuePos - b.queuePos);
+  return (
+    <div className="people-pop" ref={ref} role="dialog">
+      <h4>{t('players')} ({players.length})</h4>
+      <ul>{players.map((m) => <li key={m.pid}><span>{m.isHost ? '♛ ' : ''}{m.name}</span><span className="muted">{[m.autoplay ? 'AUTO' : '', !m.connected ? t('disconnected') : '', m.mic ? '🎙' : '', m.cam ? '📷' : ''].filter(Boolean).join(' ')}</span></li>)}</ul>
+      <h4>{t('spectators')} ({specs.length})</h4>
+      <ul>{specs.length ? specs.map((m) => <li key={m.pid}><span>👁 {m.name}</span><span className="muted">{m.queued ? `${t('in_queue')} #${m.queuePos}` : !m.connected ? t('disconnected') : ''}</span></li>) : <li className="muted">—</li>}</ul>
+    </div>
+  );
+}
+
+/** "Nu vreau remiză" above the shield of whoever just refused a vote; disappears by itself. */
+function DeclineBubble({ pid }: { pid: string | null }) {
+  const t = useT();
+  const d = useStore((s) => (pid ? s.room?.declines?.find((x) => x.pid === pid) : undefined));
+  const off = useStore((s) => s.net.serverOffset);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!d) return;
+    const ms = d.until - (Date.now() + off);
+    if (ms <= 0) return;
+    const id = setTimeout(() => tick((x) => x + 1), ms + 30);
+    return () => clearTimeout(id);
+  }, [d?.until, off]);
+  if (!d || d.until <= Date.now() + off) return null;
+  const text = d.kind === 'draw' ? t('no_draw') : d.kind === 'pause' ? t('no_pause') : d.kind === 'save' ? t('no_save') : t('no_resume');
+  return <div className="decline-bubble" role="status">🚫 {text}</div>;
+}
+
 /** Let the server play my turns (strongest bot) until I press again or make a move myself. */
 function AutoButton() {
   const t = useT();
@@ -525,6 +566,7 @@ function MyBadge({ v, seat }: { v: GameView; seat: number }) {
   return (
     <div className={`my-badge ${v.current === seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`}>
       <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
+      <DeclineBubble pid={member?.pid ?? null} />
       <div><div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div><div className="sb-score">{s.score}</div>
         {v.atuDeclaredBy.includes(seat) && <div className="sb-tag gold">ATU</div>}{member?.autoplay && <div className="sb-tag auto">AUTO</div>}{s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}</div>
     </div>

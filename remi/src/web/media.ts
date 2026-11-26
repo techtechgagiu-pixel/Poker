@@ -57,8 +57,13 @@ function createPc(pid: string) {
     catch { /* ignore */ } finally { entry.makingOffer = false; }
   };
   pc.ontrack = (e) => {
-    const stream = e.streams[0] ?? new MediaStream([e.track]);
-    patchPeer(pid, { stream });
+    // ONE stream per remote player that collects every track they send. (A track added later with replaceTrack
+    // arrives without a stream: it used to replace the player's stream, which made their video vanish when audio started.)
+    const stream = useMedia.getState().peers[pid]?.stream ?? new MediaStream();
+    if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track);
+    const refresh = () => patchPeer(pid, { stream, rev: ((useMedia.getState().peers[pid] as any)?.rev ?? 0) + 1 } as any);
+    for (const ev of ['mute', 'unmute', 'ended'] as const) e.track.addEventListener(ev, refresh);
+    refresh();
     if (e.track.kind === 'audio') attachAnalyser(pid, stream);
   };
   pc.onconnectionstatechange = () => {
@@ -152,33 +157,83 @@ function detectSpeakers() {
 const VIDEO: Record<string, { h: number; fps: number; br: number }> = { low: { h: 180, fps: 15, br: 150_000 }, balanced: { h: 360, fps: 24, br: 450_000 }, high: { h: 720, fps: 30, br: 1_200_000 } };
 
 const want = { mic: false, cam: false };
-async function setLocal(mic: boolean, cam: boolean) {
-  const s = useStore.getState().settings;
+const live = (t: MediaStreamTrack) => t.readyState === 'live';
+
+function constraints(mic: boolean, cam: boolean) {
+  const s = useStore.getState().settings; const q = VIDEO[s.videoQuality];
+  return {
+    audio: mic ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true, deviceId: s.micId || undefined } : false,
+    video: cam ? { height: { ideal: q.h }, frameRate: { max: q.fps }, deviceId: s.camId || undefined, facingMode: s.camId ? undefined : 'user' } : false,
+  } as MediaStreamConstraints;
+}
+
+/**
+ * Capture everything that is wanted in ONE getUserMedia call. On phones a second call (e.g. adding the microphone
+ * while the camera runs) can end the tracks of the first one, so the whole set is always re-acquired together
+ * and swapped in. If the combined call fails, each kind is tried on its own so one broken device never blocks the other.
+ */
+async function capture(mic: boolean, cam: boolean): Promise<{ stream: MediaStream | null; error: any }> {
+  try { return { stream: await navigator.mediaDevices.getUserMedia(constraints(mic, cam)), error: null }; }
+  catch (e: any) {
+    if (!(mic && cam) || e?.name === 'NotAllowedError') return { stream: null, error: e };
+    const tracks: MediaStreamTrack[] = []; let error: any = e;
+    for (const [m, c] of [[true, false], [false, true]] as const) { try { tracks.push(...(await navigator.mediaDevices.getUserMedia(constraints(m, c))).getTracks()); } catch (e2) { error = e2; } }
+    return { stream: tracks.length ? new MediaStream(tracks) : null, error: tracks.length ? e : error };
+  }
+}
+
+/** A track ended without us stopping it (app in background, another app took the camera, device unplugged). */
+let recoverTimer: number | undefined; let recoverTries = 0;
+function watch(stream: MediaStream) {
+  for (const tr of stream.getTracks()) tr.addEventListener('ended', () => {
+    const cur = useMedia.getState().local;
+    if (cur && cur.getTracks().includes(tr)) scheduleRecover(700);
+  }, { once: true });
+}
+function scheduleRecover(delay: number) { clearTimeout(recoverTimer); recoverTimer = window.setTimeout(recover, delay); }
+async function recover() {
   const m = useMedia.getState();
-  let stream = m.local;
-  try {
-    if (mic && !stream?.getAudioTracks().length) {
-      const a = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, deviceId: s.micId || undefined } });
-      stream = new MediaStream([...(stream?.getTracks() ?? []), ...a.getAudioTracks()]);
-      audioCtx ??= new AudioContext(); localAnalyser = audioCtx.createAnalyser(); audioCtx.createMediaStreamSource(new MediaStream(a.getAudioTracks())).connect(localAnalyser);
-    }
-    if (cam && !stream?.getVideoTracks().length) {
-      const q = VIDEO[s.videoQuality];
-      const v = await navigator.mediaDevices.getUserMedia({ video: { height: { ideal: q.h }, frameRate: { max: q.fps }, deviceId: s.camId || undefined, facingMode: s.camId ? undefined : 'user' } });
-      stream = new MediaStream([...(stream?.getTracks() ?? []), ...v.getVideoTracks()]);
-    }
-  } catch (e: any) {
-    useMedia.setState({ error: e?.name === 'NotAllowedError' ? 'permission_denied' : String(e?.message ?? e) });
-    want.mic = m.micOn; want.cam = m.camOn; // roll back only the request that failed
-    useStore.getState().toast(e?.name === 'NotAllowedError' ? 'Permisiune refuzată pentru microfon/cameră.' : 'Dispozitiv media indisponibil.', 'error');
+  const lostMic = want.mic && !m.local?.getAudioTracks().some(live);
+  const lostCam = want.cam && !m.local?.getVideoTracks().some(live);
+  if (!lostMic && !lostCam) { recoverTries = 0; return; }
+  if (document.visibilityState === 'hidden') return; // browsers refuse capture in the background: retry when visible
+  if (++recoverTries > 4) {
+    useStore.getState().toast('Camera/microfonul s-a oprit. Apasă din nou pe 📷 / 🎤.', 'error');
+    want.mic = false; want.cam = false; useMedia.setState({ micOn: false, camOn: false });
     return;
   }
-  if (stream) {
-    for (const tr of stream.getAudioTracks()) { if (!mic) { tr.stop(); stream.removeTrack(tr); } else tr.enabled = !s.pushToTalk; }
-    for (const tr of stream.getVideoTracks()) if (!cam) { tr.stop(); stream.removeTrack(tr); }
+  await apply();
+  scheduleRecover(1500); // verify it stuck
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (want.mic || want.cam)) { recoverTries = 0; scheduleRecover(300); } });
+
+async function setLocal(mic: boolean, cam: boolean) {
+  const s = useStore.getState().settings;
+  const old = useMedia.getState().local;
+  const haveA = !!old?.getAudioTracks().some(live), haveV = !!old?.getVideoTracks().some(live);
+  let stream: MediaStream | null = null;
+  if ((mic && !haveA) || (cam && !haveV)) {
+    const r = await capture(mic, cam);
+    if (r.error) {
+      useMedia.setState({ error: r.error?.name === 'NotAllowedError' ? 'permission_denied' : String(r.error?.message ?? r.error) });
+      useStore.getState().toast(r.error?.name === 'NotAllowedError' ? 'Permisiune refuzată pentru microfon/cameră.' : 'Un dispozitiv media nu este disponibil.', 'error');
+    }
+    if (!r.stream) { const m = useMedia.getState(); want.mic = m.micOn; want.cam = m.camOn; return; }
+    stream = r.stream;
+  } else if (old) {
+    stream = new MediaStream(old.getTracks().filter((t) => live(t) && (t.kind === 'audio' ? mic : cam)));
   }
-  useMedia.setState({ local: stream && stream.getTracks().length ? stream : null, micOn: mic && !!stream?.getAudioTracks().length, camOn: cam && !!stream?.getVideoTracks().length });
-  send({ t: 'media', mic: useMedia.getState().micOn, cam: useMedia.getState().camOn });
+  if (stream) {
+    // keep only what is wanted
+    for (const tr of stream.getTracks()) if (tr.kind === 'audio' ? !mic : !cam) { tr.stop(); stream.removeTrack(tr); }
+    for (const tr of stream.getAudioTracks()) tr.enabled = !s.pushToTalk;
+    if (stream.getAudioTracks().length && stream !== old) { audioCtx ??= new AudioContext(); localAnalyser = audioCtx.createAnalyser(); audioCtx.createMediaStreamSource(new MediaStream(stream.getAudioTracks())).connect(localAnalyser); }
+    watch(stream);
+  }
+  const micOn = !!stream?.getAudioTracks().some(live), camOn = !!stream?.getVideoTracks().some(live);
+  want.mic = mic && micOn; want.cam = cam && camOn;
+  useMedia.setState({ local: stream && stream.getTracks().length ? stream : null, micOn, camOn });
+  send({ t: 'media', mic: micOn, cam: camOn });
   await ensureActive();
   // (re)attach tracks to every connection
   for (const [, { pc }] of pcs) {
@@ -198,7 +253,14 @@ async function setLocal(mic: boolean, cam: boolean) {
       } else if (track && stream) pc.addTrack(track, stream);
     }
   }
+  // the previous capture is released only now that the new tracks are on every connection
+  if (old && old !== stream) for (const tr of old.getTracks()) if (!stream?.getTracks().includes(tr)) tr.stop();
 }
+
+// after a reconnect the server forgot our flags: tell the table again
+useStore.subscribe((st, prev) => {
+  if (st.net.status === 'open' && prev.net.status !== 'open') { const m = useMedia.getState(); if (m.micOn || m.camOn) send({ t: 'media', mic: m.micOn, cam: m.camOn }); }
+});
 
 /** Media changes are queued: rapid taps on mic then camera can never read stale state. */
 let chain: Promise<void> = Promise.resolve();

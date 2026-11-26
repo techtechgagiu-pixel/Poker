@@ -38,7 +38,7 @@ async function waitFor(page, fn, timeout = 20000, label = '') { const t0 = Date.
       console.log('pids', await A.page.evaluate(() => window.__remiStore.getState().you.pid), await B.page.evaluate(() => window.__remiStore.getState().you.pid));
       console.log('A local', await A.page.evaluate(() => JSON.stringify({ mic: window.__remiMedia.getState().micOn, cam: window.__remiMedia.getState().camOn, tracks: window.__remiMedia.getState().local?.getTracks().map((t) => t.kind + ':' + t.readyState), tx: [...window.__remiPcs.values()].map((e) => e.pc.getTransceivers().map((t) => (t.sender.track?.kind ?? '-') + '/' + t.receiver.track.kind + '/' + t.direction + '/' + t.currentDirection)) }))); for (const [n, P] of [['A', A], ['B', B]]) console.log(n, JSON.stringify(await P.page.evaluate(async () => Promise.all([...window.__remiPcs.values()].map(async (e) => { const st = await e.pc.getStats(); const c = []; st.forEach((r) => { if (r.type === 'local-candidate' || r.type === 'remote-candidate') c.push(r.type[0] + ':' + r.candidateType + ':' + r.protocol + ':' + r.address); if (r.type === 'candidate-pair') c.push('pair:' + r.state); }); return { sig: e.pc.signalingState, ice: e.pc.iceConnectionState, gather: e.pc.iceGatheringState, local: !!e.pc.localDescription, remote: !!e.pc.remoteDescription, c }; }))))); throw e; });
     ok('WebRTC peers connect; B receives A\'s audio+video', true);
-    const video = await B.page.locator('.seat-badge video').count();
+    const video = await waitFor(B.page, async () => (await B.page.locator('.seat-badge video').count()) >= 1, 10000, 'remote video element').then(() => 1).catch(() => 0);
     ok('remote video replaces the avatar', video >= 1);
     console.log('levels', JSON.stringify(await B.page.evaluate(async () => { const out = []; for (let i = 0; i < 20; i++) { for (const e of window.__remiPcs.values()) for (const r of e.pc.getReceivers()) if (r.track.kind === 'audio') { const ss = r.getSynchronizationSources(); const st = await r.getStats(); let lvl = null; st.forEach((x) => { if (x.type === 'inbound-rtp') lvl = [x.audioLevel, x.totalAudioEnergy, x.packetsReceived]; }); out.push([ss.map((x) => x.audioLevel), lvl]); } await new Promise((r) => setTimeout(r, 150)); } return out.slice(-4); })));
     const ring = await waitFor(B.page, () => B.page.evaluate(() => Object.values(window.__remiMedia.getState().peers).some((p) => p.speaking)), 15000, 'speaking').then(() => true).catch(() => false);
@@ -46,6 +46,32 @@ async function waitFor(page, fn, timeout = 20000, label = '') { const t0 = Date.
     const mic = await waitFor(B.page, async () => (await state(B.page)).room.members.some((m) => m.name === 'Ana' && m.mic && m.cam), 8000, 'flags').then(() => true).catch(() => false);
     ok('mic/camera status synchronised to the table', mic);
     await B.page.screenshot({ path: `${OUT}/media-video.png` });
+    // camera first, then microphone: the camera must stay on (this is what phones used to break)
+    {
+      const C1 = await mk('Camera'); const D1 = await mk('Dora');
+      const rr = await C1.page.evaluate(async () => { const d = await (await fetch('/api/config/defaults')).json();
+        return (await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', 'x-guest': 'cam-' + Date.now() }, body: JSON.stringify({ name: 'Camera', mode: 'human', config: { ...d.config, turnSeconds: 0 } }) })).json(); });
+      await C1.page.evaluate((r) => localStorage.setItem('remi.room.' + r.code, JSON.stringify({ token: r.token, pid: r.pid })), rr);
+      await C1.page.goto(`${BASE}/room/${rr.code}`);
+      await D1.page.goto(`${BASE}/join/${rr.code}`); await D1.page.getByRole('button', { name: 'Intră', exact: true }).click();
+      await D1.page.getByRole('button', { name: 'Sunt gata' }).click();
+      await waitFor(C1.page, async () => (await state(C1.page)).room.members.every((m) => m.role !== 'player' || m.ready || m.isHost), 10000, 'ready c');
+      await C1.page.getByRole('button', { name: 'Începe partida' }).click();
+      for (const P of [C1, D1]) await waitFor(P.page, async () => !!(await state(P.page)).game, 15000, 'game c');
+      const tracks = () => C1.page.evaluate(() => (window.__remiMedia.getState().local?.getTracks() ?? []).map((t) => t.kind + ':' + t.readyState).sort().join(','));
+      await C1.page.locator('.tb-btn', { hasText: '📷' }).click(); await sleep(1200);
+      const t1 = await tracks();
+      await C1.page.locator('.tb-btn', { hasText: '🎤' }).click(); await sleep(1800);
+      const t2 = await tracks();
+      ok('camera stays live when the microphone is switched on (both live afterwards)', t1 === 'video:live' && t2 === 'audio:live,video:live', `${t1} -> ${t2}`);
+      const remote = await waitFor(D1.page, () => D1.page.evaluate(() => Object.values(window.__remiMedia.getState().peers).some((p) => p.stream && p.stream.getVideoTracks().some((t) => t.readyState === 'live') && p.stream.getAudioTracks().length)), 20000, 'remote av').then(() => true).catch(() => false);
+      ok('the other player receives video and audio after both are on', remote);
+      // the browser/OS ends the camera track (phone in background): it must come back by itself
+      await C1.page.evaluate(() => { const tr = window.__remiMedia.getState().local.getVideoTracks()[0]; tr.stop(); tr.dispatchEvent(new Event('ended')); });
+      const back = await waitFor(C1.page, async () => (await tracks()).includes('video:live'), 8000, 'camera recovered').then(() => true).catch(() => false);
+      ok('camera lost by the browser is restarted automatically', back, await tracks());
+      await C1.ctx.close(); await D1.ctx.close();
+    }
     // individual mute
     await B.page.locator('.peer-mute').first().click();
     const muted = await B.page.evaluate(() => [...document.querySelectorAll('audio')].some((a) => a.muted));

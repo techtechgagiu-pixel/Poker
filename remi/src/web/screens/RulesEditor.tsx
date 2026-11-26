@@ -108,6 +108,7 @@ export function RulesEditor({ cfg, onChange, readOnly }: { cfg: RoomConfig; onCh
           <label>{t('opt_passMax')} {num(cfg.pass.maxPerRound, (n) => up((x) => { x.pass.maxPerRound = n; }), 1, 10, !cfg.pass.enabled)}</label>
           <label>{t('opt_passDelta')} {num(cfg.pass.activatorScoreDelta, (n) => up((x) => { x.pass.activatorScoreDelta = n; }), -1000, 1000, !cfg.pass.enabled)}</label>
           {chk(cfg.pass.affectsActivator, (b) => up((x) => { x.pass.affectsActivator = b; }), 'opt_passSelf')}
+          {chk(cfg.pass.activatorMustCloseWithJoker !== false, (b) => up((x) => { x.pass.activatorMustCloseWithJoker = b; }), 'opt_passJoker')}
           {chk(cfg.highAce, (b) => up((x) => { x.highAce = b; }), 'opt_highAce')}
           {chk(cfg.doubleJokerPair, (b) => up((x) => { x.doubleJokerPair = b; }), 'opt_jokerPair')}
           {chk(cfg.jokerMultiplier.enabled, (b) => up((x) => { x.jokerMultiplier.enabled = b; }), 'opt_jokerMult', cfg.jokerMultiplier.enabled ? <span> ×{num(cfg.jokerMultiplier.factorPerJoker, (n) => up((x) => { x.jokerMultiplier.factorPerJoker = n; }), 1, 10)}</span> : null)}

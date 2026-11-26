@@ -57,6 +57,16 @@ const menu = async (page, label) => { await page.locator('.table-menu > button')
     const left = res.game.turnDeadline - Date.now() - 0;
     ok('resume restores the remaining turn time', Math.abs(left - p.game.pausedRemaining) < 4000, `${Math.round(left / 1000)}s vs ${Math.round(p.game.pausedRemaining / 1000)}s`);
 
+    // ---- remiză refused: a bubble appears above the refusing player's shield
+    await menu(A.page, 'Solicită remiză');
+    await B.page.locator('.vote-toast').getByRole('button', { name: 'Nu' }).click();
+    const bubble = await waitFor(A.page, async () => (await A.page.locator('.decline-bubble').count()) >= 1, 6000, 'decline bubble').then(() => true).catch(() => false);
+    const txt = bubble ? await A.page.locator('.decline-bubble').first().innerText() : '';
+    ok('refusing a draw shows "Nu vreau remiză" above the refusing player', bubble && /remiz/i.test(txt), txt);
+    const gone = await waitFor(A.page, async () => (await A.page.locator('.decline-bubble').count()) === 0, 9000, 'bubble gone').then(() => true).catch(() => false);
+    ok('the bubble disappears by itself', gone);
+    ok('the round was not drawn after a refusal', (await state(A.page)).game.phase.startsWith('WAITING') && (await state(A.page)).game.round === 1);
+
     // ---- save & exact restore
     await menu(A.page, 'Salvează partida');
     console.log('vote step');

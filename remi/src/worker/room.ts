@@ -39,6 +39,8 @@ interface RoomData {
   racks: Record<string, (number | null)[]>;
   vote: VoteState | null; pausedUntil: number | null;
   nextReady: string[]; botAt: number | null; recorded: number[];
+  /** players who just refused a vote (pause / draw / save): shown above their shield for a few seconds */
+  declines?: { pid: string; kind: string; until: number }[];
   tournament: { id: string; matchId: string } | null;
   /** tournament rooms: only these player keys may join as players */
   allowedKeys: string[] | null;
@@ -145,6 +147,9 @@ export class RemiRoom extends DurableObject<Env> {
     await this.schedule();
     return { code: r.code, token, pid: m.pid, role: m.role, queued: !!m.queued };
   }
+
+  /** Make sure the room is re-broadcast shortly (e.g. to clear a transient bubble). */
+  async alarmSoon(ms: number) { const t = Date.now() + ms; const cur = await this.ctx.storage.getAlarm(); if (!cur || cur > t) await this.ctx.storage.setAlarm(t); }
 
   queue(): Member[] { return this.room!.members.filter((x) => x.queued).sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0)); }
 
@@ -575,7 +580,13 @@ export class RemiRoom extends DurableObject<Env> {
   answerVote(m: Member, yes: boolean): boolean {
     const r = this.room!;
     if (!r.vote || !r.vote.needed.includes(m.pid)) throw new GameError('no_vote');
-    if (!yes) { this.sys(`${m.name} a refuzat.`); r.vote = null; return true; }
+    if (!yes) {
+      const kind = r.vote.kind;
+      this.sys(`${m.name} a refuzat${kind === 'draw' ? ' remiza' : kind === 'pause' ? ' pauza' : kind === 'save' ? ' salvarea' : ''}.`);
+      r.declines = [...(r.declines ?? []).filter((d) => d.until > Date.now() && d.pid !== m.pid), { pid: m.pid, kind, until: Date.now() + 6000 }];
+      r.vote = null; this.ctx.waitUntil(this.alarmSoon(6200));
+      return true;
+    }
     if (!r.vote.yes.includes(m.pid)) r.vote.yes.push(m.pid);
     this.resolveVote();
     return true;
@@ -749,7 +760,7 @@ export class RemiRoom extends DurableObject<Env> {
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,
-      gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now, mode: r.mode, scenario: r.scenario };
+      declines: (r.declines ?? []).filter((d) => d.until > now), gameSeatPids: r.gameSeatPids, matchNo: r.matchNo, maintenance: false, serverTime: now, mode: r.mode, scenario: r.scenario };
   }
 
   sendState(ws: WebSocket, m: Member) {

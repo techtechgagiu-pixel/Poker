@@ -247,6 +247,48 @@ describe('PASS', () => {
   });
 });
 
+describe('PASS activator must close with a joker', () => {
+  const plain = [t(R, 1), t(R, 2), t(R, 3), t(R, 4), t(B, 5), t(B, 6), t(B, 7), t(Y, 9), t(B, 9), t(K, 9), t(K, 11), t(K, 12), t(K, 13), t(R, 9)];
+  function setup(seed: number) {
+    const { g, cfg } = fresh(seed);
+    const old = g.indicator; const id = t(Y, 4, 1);
+    for (const arr of [g.drawPile, ...g.hands]) { const i = arr.indexOf(id); if (i >= 0) { arr[i] = old; break; } }
+    g.indicator = id; g.joker = { color: Y, num: 5 }; // jokers: yellow 5 (two copies)
+    return { g, cfg };
+  }
+  it('after PASS a normal close is refused, a close discarding the other joker is accepted', () => {
+    const { g, cfg } = setup(71);
+    const s0 = g.starter; const j1 = t(Y, 5, 0), j2 = t(Y, 5, 1);
+    rig(g, s0, [j1, j2, ...plain.slice(0, 13)]);
+    activatePass(g, cfg, s0, j1, 0);
+    // walk the table round to s0 again, giving s0 the winning hand + a plain extra tile
+    let guard = 0; while (g.current !== s0 && guard++ < 10) { const s = g.current; draw(g, cfg, s, 'pile', 0); discard(g, cfg, s, g.hands[s].at(-1)!, 0); }
+    draw(g, cfg, s0, 'pile', 0);
+    // make the hand: 14 winning tiles (incl. joker j2 replacing r2) + one plain extra
+    const extra = t(Y, 12, 1);
+    const hand = [...plain.slice(0, 1), j2, ...plain.slice(2), extra];
+    g.hands[s0] = hand; // tile conservation is not under test here
+    expect(checkClose(g, cfg, s0, extra).error).toBe('pass_activator_must_close_with_joker');
+    // discarding the joker itself as the last tile is allowed (the other 14 form a valid hand)
+    g.hands[s0] = [...plain, j2];
+    expect(checkClose(g, cfg, s0, j2).ok).toBe(true);
+    // option off: any valid close is fine
+    cfg.pass.activatorMustCloseWithJoker = false;
+    g.hands[s0] = [...plain.slice(0, 1), j2, ...plain.slice(2), extra];
+    expect(checkClose(g, cfg, s0, extra).ok).toBe(true);
+  });
+  it('players who did not activate PASS are not restricted', () => {
+    const { g, cfg } = setup(72);
+    const s0 = g.starter; const j1 = t(Y, 5, 0), j2 = t(Y, 5, 1);
+    rig(g, s0, [j1, j2, ...plain.slice(0, 13)]);
+    activatePass(g, cfg, s0, j1, 0);
+    const other = g.current;
+    g.hands[other] = [...plain, t(Y, 12, 1)];
+    g.phase = 'WAITING_FOR_DISCARD';
+    expect(checkClose(g, cfg, other, t(Y, 12, 1)).ok).toBe(true);
+  });
+});
+
 describe('Arătare atu', () => {
   it('holder of the second indicator copy penalises opponents once, keeps tile, keeps turn', () => {
     const { g, cfg } = fresh(41);

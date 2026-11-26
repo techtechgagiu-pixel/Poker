@@ -19,12 +19,13 @@ export const defaultSettings: Settings = {
   lang: 'ro', theme: 'mahogany', quality: 'auto', fps: 'auto', reducedMotion: false, highContrast: false, skipAnim: false,
   rackRows: 2, tileSize: 'l', tileSpacing: 4, snapping: true,
   master: 0.8, music: 0, sfx: 0.8, voice: 1, notif: 0.7, mute: false, ambient: 'fire',
-  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true, tableZoom: 1, musicTrack: 'none',
+  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: false, tableZoom: 1, musicTrack: 'none',
 };
 function loadSettings(): Settings {
   try {
     const s = { ...defaultSettings, ...JSON.parse(localStorage.getItem('remi.settings') ?? '{}') };
     if (!localStorage.getItem('remi.tilesV2')) { s.tileSize = 'l'; localStorage.setItem('remi.tilesV2', '1'); }
+    if (!localStorage.getItem('remi.noConfirmV1')) { s.confirmJoker = false; localStorage.setItem('remi.noConfirmV1', '1'); } // never warn when a joker is discarded
     // one background sound at a time; the guitar track was removed
     if (!localStorage.getItem('remi.soundV2')) { s.musicTrack = 'none'; localStorage.setItem('remi.soundV2', '1'); }
     if ((s.musicTrack as string) === 'guitar') s.musicTrack = 'none';

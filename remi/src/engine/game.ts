@@ -172,6 +172,11 @@ export function passBlocksSeat(g: GameState, cfg: RoomConfig, seat: number): boo
   return true;
 }
 
+/** The player who activated PASS this round may only close by discarding a real joker. */
+export function passActivatorMustJoker(cfg: RoomConfig, passBy: number | null, seat: number): boolean {
+  return cfg.pass.enabled && cfg.pass.activatorMustCloseWithJoker && cfg.closeByJokerDiscard && passBy === seat;
+}
+
 export function canTakeDiscard(g: GameState, cfg: RoomConfig, seat: number): boolean {
   if (g.phase !== 'WAITING_FOR_DRAW' || g.current !== seat) return false;
   if (passBlocksSeat(g, cfg, seat)) return false;
@@ -324,6 +329,7 @@ export function checkClose(g: GameState, cfg: RoomConfig, seat: number, discardT
   if (!h.includes(discardTile)) return { ok: false, error: 'not_owner' };
   const jokerDiscard = isRealJoker(discardTile, g.joker);
   if (jokerDiscard && !cfg.closeByJokerDiscard) return { ok: false, error: 'joker_discard_close_disabled' };
+  if (passActivatorMustJoker(cfg, g.pass.by, seat) && !jokerDiscard) return { ok: false, error: 'pass_activator_must_close_with_joker' };
   const hand = h.filter((id) => id !== discardTile);
   const matches = detectWins(hand, g.joker, cfg);
   const win = chooseWin(matches, jokerDiscard, hand, g.joker, cfg, requested);

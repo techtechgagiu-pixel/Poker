@@ -26,6 +26,7 @@ export interface RoomView {
   pausedUntil: number | null;
   nextReady: string[];
   /** game seat -> lobby seat index (match only) */
+  declines: { pid: string; kind: string; until: number }[];
   gameSeatPids: (string | null)[];
   matchNo: number;
   maintenance: boolean;

@@ -5,6 +5,7 @@ import { RoomConfig, CategoryKey } from './config';
 import { GameView } from './view';
 import { JokerInfo, Rng, isRealJoker, effective, natural } from './tiles';
 import { analyse, maxCoverage, chooseWin, detectWins, cell } from './validator';
+import { passActivatorMustJoker } from './game';
 
 export type Level = 'easy' | 'medium' | 'hard';
 export type BotMove =
@@ -77,9 +78,11 @@ export function findClose(view: GameView, cfg: RoomConfig): { tile: number; cate
   const me = view.me!;
   if (me.hand.length !== 15) return null;
   let best: { tile: number; category: CategoryKey; penalty: number } | null = null;
+  const mustJoker = passActivatorMustJoker(cfg, view.pass.by, me.seat);
   for (const t of me.hand) {
     const jd = isRealJoker(t, view.joker);
     if (jd && !cfg.closeByJokerDiscard) continue;
+    if (mustJoker && !jd) continue;
     const rest = me.hand.filter((x) => x !== t);
     const w = chooseWin(detectWins(rest, view.joker, cfg), jd, rest, view.joker, cfg);
     if (w && (!best || w.penalty > best.penalty)) best = { tile: t, category: w.category, penalty: w.penalty };

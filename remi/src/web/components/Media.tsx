@@ -17,8 +17,8 @@ export const PlayerAvatar = memo(function PlayerAvatar({ pid, name, isBot }: { p
   const vref = useRef<HTMLVideoElement>(null);
   const aref = useRef<HTMLAudioElement>(null);
   const stream = isMe ? local : peer?.stream ?? null;
-  const hasVideo = !!stream?.getVideoTracks().some((t) => t.readyState === 'live') && !(peer?.hiddenVideo || (!isMe && allHidden));
-  useEffect(() => { if (vref.current && vref.current.srcObject !== stream) vref.current.srcObject = stream; }, [stream, hasVideo]);
+  const hasVideo = !!stream?.getVideoTracks().some((t) => t.readyState === 'live' && (isMe || !t.muted)) && !(peer?.hiddenVideo || (!isMe && allHidden));
+  useEffect(() => { const v = vref.current; if (!v) return; if (v.srcObject !== stream) v.srcObject = stream; v.play?.().catch(() => null); }, [stream, hasVideo]);
   useEffect(() => {
     const a = aref.current; if (!a || isMe) return;
     if (a.srcObject !== stream) a.srcObject = stream;

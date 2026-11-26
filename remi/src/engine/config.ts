@@ -35,6 +35,8 @@ export interface RoomConfig {
     maxPerRound: number;
     /** Score change applied to the activator (negative = penalty, positive = reward). */
     activatorScoreDelta: number;
+    /** After activating PASS the player may only close by discarding a real joker. */
+    activatorMustCloseWithJoker: boolean;
   };
   atu: { enabled: boolean; penalty: number; oncePerRound: boolean };
   bots: { fillEmpty: boolean; difficulty: 'easy' | 'medium' | 'hard' };
@@ -83,7 +85,7 @@ export function defaultConfig(): RoomConfig {
     doubleJokerPair: true,
     triplesAllowFour: true,
     jokerMultiplier: { enabled: false, factorPerJoker: 2 },
-    pass: { enabled: true, duration: { kind: 'round' }, affectsActivator: true, maxPerRound: 1, activatorScoreDelta: 0 },
+    pass: { enabled: true, duration: { kind: 'round' }, affectsActivator: true, maxPerRound: 1, activatorScoreDelta: 0, activatorMustCloseWithJoker: true },
     atu: { enabled: true, penalty: 1, oncePerRound: true },
     bots: { fillEmpty: true, difficulty: 'medium' },
     spectators: true,
@@ -93,7 +95,7 @@ export function defaultConfig(): RoomConfig {
     reconnectGraceSeconds: 15,
     botTakeover: true,
     nextRoundSeconds: 8,
-    confirmJokerDiscard: true,
+    confirmJokerDiscard: false,
     pauseVote: { enabled: true, voteSeconds: 15, maxPauseSeconds: 300, maxPerPlayer: 2 },
     training: false,
     winnerCollects: true,
@@ -155,6 +157,7 @@ export function sanitizeConfig(input: unknown): RoomConfig {
     affectsActivator: bool(p.affectsActivator, d.pass.affectsActivator),
     maxPerRound: clampInt(p.maxPerRound, 1, 10, 1),
     activatorScoreDelta: clampInt(p.activatorScoreDelta, -1000, 1000, 0),
+    activatorMustCloseWithJoker: bool(p.activatorMustCloseWithJoker, d.pass.activatorMustCloseWithJoker),
   };
   out.atu = { enabled: bool(i.atu?.enabled, d.atu.enabled), penalty: clampInt(i.atu?.penalty, 0, 1000, 1), oncePerRound: bool(i.atu?.oncePerRound, true) };
   const diff = ['easy', 'medium', 'hard'].includes(i.bots?.difficulty) ? i.bots.difficulty : d.bots.difficulty;
