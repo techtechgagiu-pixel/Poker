@@ -95,7 +95,7 @@ function Lobby() {
       <header className="page-head">
         <button className="btn-wood" onClick={() => navigate('/')}>← {t('leave')}</button>
         <h1>{t('lobby')} <span className="gold">{room.code}</span></h1>
-        {room.config.chat && <button className="btn-wood" onClick={() => setChat(!chat)}>💬 {t('chat')}</button>}
+        {room.config.chat && <button className="btn-wood" data-toggle="chat" onClick={() => setChat(!chat)}>💬 {t('chat')}</button>}
       </header>
       <div className="lobby-grid">
         <section className="card">

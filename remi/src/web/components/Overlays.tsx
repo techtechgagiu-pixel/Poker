@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, useMedia, defaultSettings } from '../store';
 import { useT, TKey } from '../i18n';
+import { useClickOutside } from '../useOutside';
 import { send } from '../net';
 import { Tile } from './Tile';
 import { useRack, reshape } from '../rack';
@@ -128,6 +129,8 @@ const QUICK = ['Bravo! 👏', 'Hai, că poți!', 'Ce noroc! 🍀', 'Mulțumesc!'
 const REACT = ['👍', '😂', '😮', '😡', '🔥', '❤️'];
 export function ChatPanel({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const panel = useRef<HTMLDivElement>(null);
+  useClickOutside(panel, onClose, '[data-toggle="chat"]');
   const room = useStore((s) => s.room)!;
   const [text, setText] = useState('');
   const [muted, setMuted] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('remi.muted') ?? '[]'); } catch { return []; } });
@@ -135,7 +138,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => { list.current?.scrollTo({ top: 1e6 }); }, [room.chat.length]);
   const toggleMute = (pid: string) => { const m = muted.includes(pid) ? muted.filter((x) => x !== pid) : [...muted, pid]; setMuted(m); try { localStorage.setItem('remi.muted', JSON.stringify(m)); } catch { /* */ } };
   return (
-    <div className="chat-panel">
+    <div className="chat-panel" ref={panel}>
       <div className="cp-head">{t('chat')} <button onClick={onClose} aria-label={t('close')}>✕</button></div>
       <div className="cp-list" ref={list}>
         {room.chat.filter((c) => !muted.includes(c.pid)).map((c) => (
@@ -155,8 +158,10 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
 
 export function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const panel = useRef<HTMLDivElement>(null);
+  useClickOutside(panel, onClose, '[data-toggle="settings"]');
   return (
-    <div className="drawer">
+    <div className="drawer" ref={panel}>
       <div className="cp-head">{t('menu_settings')} <button onClick={onClose} aria-label={t('close')}>✕</button></div>
       <SettingsForm compact />
     </div>

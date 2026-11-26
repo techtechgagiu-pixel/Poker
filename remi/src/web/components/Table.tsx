@@ -14,6 +14,7 @@ import { RoundResult, MatchResult, VoteDialog, ChatPanel, SettingsDrawer, HintsP
 import { PlayerAvatar } from './Media';
 import { sfx } from '../sound';
 import { onPad } from '../gamepad';
+import { useClickOutside } from '../useOutside';
 
 export type Spot = 'bottom' | 'right' | 'top' | 'left';
 const W = 1600;
@@ -150,8 +151,10 @@ function HistoryBar({ v, seat, onClose }: { v: GameView; seat: number; onClose: 
   const pile = v.discards[seat] ?? [];
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo({ left: ref.current.scrollWidth, behavior: 'smooth' }); }, [pile.length]);
+  const bar = useRef<HTMLDivElement>(null);
+  useClickOutside(bar, onClose, '.discard-stack'); // pressing another stack switches the history instead
   return (
-    <div className="history-bar" role="dialog" aria-label={t('history_of')}>
+    <div className="history-bar" role="dialog" aria-label={t('history_of')} ref={bar}>
       <div className="hb-title">{t('history_of')} <b>{v.seats[seat].name}</b> · {pile.length}</div>
       <div className="hb-tiles" ref={ref} tabIndex={0} data-nav="history">
         {pile.map((id, i) => <Tile key={id} id={id} joker={v.joker} w={44} h={60} className={i === pile.length - 1 ? 'latest' : ''} />)}
@@ -228,6 +231,8 @@ export function GameTable() {
   const doDraw = () => { if (canDraw) act({ type: 'draw', source: 'pile' }); };
   const doTake = () => { if (canTake) act({ type: 'draw', source: 'discard' }); };
   const pileDrag = useTableDrag(canDraw, () => ghostTile('<div class="tile back" style="width:58px;height:80px"></div>'), (slot) => { if (slot !== null && canDraw) { pendingDrop.slot = slot; pendingDrop.at = Date.now(); doDraw(); } });
+  const sortRef = useRef<HTMLDivElement>(null);
+  useClickOutside(sortRef, () => setSortOpen(false), '[data-toggle="sort"]', sortOpen);
   const doAtu = () => { if (me?.canAtu && !pending) act({ type: 'atu' }); };
   const sortBy = (mode: Parameters<typeof arrange>[3]) => {
     if (!me) return;
@@ -335,12 +340,12 @@ export function GameTable() {
           <div className="tb-actions">
             <LastMoveButton v={v} />
             <MediaButtons />
-            {cfg.chat && <button className="tb-btn" onClick={() => setChatOpen((x) => !x)} aria-label={t('chat')} data-nav="btn">💬<ChatBadge /></button>}
+            {cfg.chat && <button className="tb-btn" data-toggle="chat" onClick={() => setChatOpen((x) => !x)} aria-label={t('chat')} data-nav="btn">💬<ChatBadge /></button>}
             <span className="tb-pill" title={t('players')}>👥 {room.members.filter((m) => m.role === 'player').length}</span>
             <span className="tb-pill" title={t('spectators')}>👁 {room.members.filter((m) => m.role === 'spectator').length}</span>
             <button className="tb-btn gold zoom-btn" onClick={() => { const z = ((settings.tableZoom ?? 1) % 3 + 1) as 1 | 2 | 3; useStore.getState().setSettings({ tableZoom: z }); useRack.setState({ layout: reshape(useRack.getState().layout, settings.rackRows) }); }} title={t('table_zoom')} aria-label={t('table_zoom')} data-nav="btn">🔍<small>{settings.tableZoom ?? 1}</small></button>
             <button className="tb-btn gold" onClick={toggleFs} aria-label={t('fullscreen')} title={t('fullscreen')} data-nav="btn">{fs ? <IconMin /> : <IconMax />}</button>
-            <button className="tb-btn" onClick={() => setSettingsOpen((x) => !x)} aria-label={t('btn_settings')} data-nav="btn">⚙</button>
+            <button className="tb-btn" data-toggle="settings" onClick={() => setSettingsOpen((x) => !x)} aria-label={t('btn_settings')} data-nav="btn">⚙</button>
           </div>
         </div>
 
@@ -437,14 +442,14 @@ export function GameTable() {
               <div className="ctl-row">
                 {cfg.pass.enabled && me.canPass && <button className="btn-pass pulse" disabled={!!pending} onClick={doPass} data-nav="btn">♛ {t('btn_pass')}</button>}
                 {cfg.atu.enabled && me.canAtu && <button className="btn-gold pulse" onClick={doAtu} data-nav="btn">{t('btn_atu')}</button>}
-                <button className="btn-wood" onClick={() => setSortOpen((x) => !x)} data-nav="btn">{t('btn_sort')}</button>
+                <button className="btn-wood" data-toggle="sort" onClick={() => setSortOpen((x) => !x)} data-nav="btn">{t('btn_sort')}</button>
                 <AutoButton />
               </div>
             </div>
           )}
         </div>
         {sortOpen && (
-          <div className="sort-menu" role="menu">
+          <div className="sort-menu" role="menu" ref={sortRef}>
             {(['number', 'color', 'runs', 'sets', 'pairs', 'auto'] as const).map((m) => (
               <button key={m} onClick={() => sortBy(m)} data-nav="btn">{t(({ number: 'sort_number', color: 'sort_color', runs: 'group_runs', sets: 'group_sets', pairs: 'group_pairs', auto: 'auto_arrange' } as const)[m])}</button>
             ))}
@@ -473,9 +478,11 @@ export function GameTable() {
 function TableMenu({ v, cfg }: { v: GameView; cfg: RoomConfig }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useClickOutside(wrap, () => setOpen(false), undefined, open);
   const pick = (kind: 'pause' | 'resume' | 'draw' | 'save') => { send({ t: 'vote', kind }); setOpen(false); };
   return (
-    <div className="table-menu">
+    <div className="table-menu" ref={wrap}>
       <button className="small-btn" onClick={() => setOpen(!open)} data-nav="btn" aria-expanded={open}>☰ {t('lobby')}</button>
       {open && (
         <div className="table-menu-pop" role="menu">
