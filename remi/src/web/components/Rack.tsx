@@ -106,12 +106,27 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     sfx('snap');
   };
 
+  /** The browser dropped the gesture (second finger, system gesture, app switch): put the tile back, never leave it floating. */
+  const cancelDrag = () => {
+    const d = drag.current; if (!d) return;
+    drag.current = null; if (d.raf) cancelAnimationFrame(d.raf);
+    const home = pos(d.from);
+    d.el.classList.remove('dragging');
+    d.el.style.transform = `translate3d(${home.x}px, ${home.y}px, 0)`;
+  };
+  const onLost = (e: React.PointerEvent) => { if (drag.current?.pid === e.pointerId) cancelDrag(); };
+  useEffect(() => {
+    const c = () => cancelDrag();
+    const vis = () => { if (document.visibilityState === 'hidden') cancelDrag(); };
+    window.addEventListener('blur', c); document.addEventListener('visibilitychange', vis);
+    return () => { window.removeEventListener('blur', c); document.removeEventListener('visibilitychange', vis); };
+  });
   // keyboard / controller "held" tile visual
   useEffect(() => () => { if (drag.current?.raf) cancelAnimationFrame(drag.current.raf); }, []);
 
   return (
     <div className="rack-wrap" style={{ width: width + 36 }}>
-      <div className="rack" ref={ref} style={{ width, height }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+      <div className="rack" ref={ref} style={{ width, height }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onLost}>
         {Array.from({ length: rows }, (_, r) => <div key={r} className="rack-ledge" style={{ top: pad + r * (th + 10) + th - 4 }} />)}
         {focusIndex !== null && <div className="rack-focus" style={{ transform: `translate3d(${pos(focusIndex).x - 4}px, ${pos(focusIndex).y - 4}px,0)`, width: tw + 8, height: th + 8 }} />}
         {slots.map(({ id, i }) => id === null ? null : (

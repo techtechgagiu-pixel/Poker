@@ -31,6 +31,7 @@ export function onGameView(prev: GameView | null, v: GameView | null, serverRack
     const sel = st.selected.filter((x) => v.me!.hand.includes(x));
     if (sel.length !== st.selected.length) st.set({ selected: sel });
   }
+  if (!prev || prev.round !== v.round) document.querySelectorAll('.drag-ghost').forEach((g) => g.remove()); // belt and braces
   if (!prev || prev.round !== v.round) { if (v.round > 0) sfx('draw'); st.set({ historySeat: null, hints: [] }); return; }
   const newEvents = v.events.filter((e) => !prev.events.some((p) => p.n === e.n));
   for (const e of newEvents) {

@@ -343,3 +343,4 @@ body.controller-mode [data-nav]:focus { outline: 4px solid var(--gold); }
 .drag-ghost .tile { width: 58px; height: 80px; }
 .discard-stack.eligible, .draw-pile.can { cursor: grab; touch-action: none; }
 .discard-stack .top-wrap { position: relative; z-index: 1; }
+.draw-pile[aria-disabled="true"] { cursor: default; }

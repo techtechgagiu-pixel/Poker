@@ -80,31 +80,45 @@ const TurnTimer = memo(function TurnTimer({ deadline, total, paused }: { deadlin
  * Drag a tile from the table (eligible left discard or the draw pile) onto the rack.
  * A tap without movement keeps the normal click behaviour. The ghost follows the pointer in rAF.
  */
+/**
+ * Drag a tile from the table (eligible left discard or the draw pile) onto the rack.
+ * While dragging, the gesture is tracked on window, so the ghost is always removed: even if the source
+ * becomes disabled, re-renders or unmounts mid-drag, the pointer is lost, the app is backgrounded or the window blurs.
+ */
 function useTableDrag(enabled: boolean, ghost: () => HTMLElement, onDrop: (slot: number | null) => void) {
-  const d = useRef<{ sx: number; sy: number; moved: boolean; el: HTMLElement | null; raf: number; x: number; y: number; id: number } | null>(null);
+  const d = useRef<{ sx: number; sy: number; moved: boolean; el: HTMLElement | null; raf: number; x: number; y: number; id: number; stop: () => void } | null>(null);
   const suppressClick = useRef(false);
+  const live = useRef({ enabled, onDrop, ghost }); live.current = { enabled, onDrop, ghost };
+  const end = (drop: PointerEvent | null) => {
+    const s = d.current; if (!s) return;
+    d.current = null; s.stop();
+    if (s.raf) cancelAnimationFrame(s.raf);
+    s.el?.remove();
+    if (!s.moved) return;
+    suppressClick.current = true; setTimeout(() => (suppressClick.current = false), 0);
+    if (!drop || !live.current.enabled) return; // cancelled, or the turn changed mid-drag
+    const over = document.elementFromPoint(drop.clientX, drop.clientY)?.closest('.rack-wrap');
+    live.current.onDrop(over ? rackHit.slotAt?.(drop.clientX, drop.clientY) ?? null : null);
+  };
+  useEffect(() => () => end(null), []); // unmount: never leave a ghost behind
   return {
     onPointerDown: (e: React.PointerEvent) => {
-      if (!enabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      d.current = { sx: e.clientX, sy: e.clientY, moved: false, el: null, raf: 0, x: e.clientX, y: e.clientY, id: e.pointerId };
+      if (!enabled || d.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const id = e.pointerId;
+      const move = (ev: PointerEvent) => {
+        const s = d.current; if (!s || ev.pointerId !== id) return;
+        s.x = ev.clientX; s.y = ev.clientY;
+        if (!s.moved && Math.hypot(s.x - s.sx, s.y - s.sy) > 6) { s.moved = true; s.el = live.current.ghost(); document.body.appendChild(s.el); }
+        if (s.moved && !s.raf) s.raf = requestAnimationFrame(() => { s.raf = 0; if (s.el) { const k = rackHit.scale(); s.el.style.transform = `translate3d(${s.x - 30 * k}px, ${s.y - 42 * k}px, 0) scale(${(k * 1.08).toFixed(3)})`; } });
+      };
+      const up = (ev: PointerEvent) => { if (ev.pointerId === id) end(ev); };
+      const cancel = () => end(null);
+      const vis = () => { if (document.visibilityState === 'hidden') end(null); };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
+      window.addEventListener('blur', cancel); document.addEventListener('visibilitychange', vis);
+      const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); window.removeEventListener('blur', cancel); document.removeEventListener('visibilitychange', vis); };
+      d.current = { sx: e.clientX, sy: e.clientY, moved: false, el: null, raf: 0, x: e.clientX, y: e.clientY, id, stop };
     },
-    onPointerMove: (e: React.PointerEvent) => {
-      const s = d.current; if (!s || s.id !== e.pointerId) return;
-      s.x = e.clientX; s.y = e.clientY;
-      if (!s.moved && Math.hypot(s.x - s.sx, s.y - s.sy) > 6) { s.moved = true; s.el = ghost(); document.body.appendChild(s.el); }
-      if (s.moved && !s.raf) s.raf = requestAnimationFrame(() => { s.raf = 0; if (s.el) { const k = rackHit.scale(); s.el.style.transform = `translate3d(${s.x - 30 * k}px, ${s.y - 42 * k}px, 0) scale(${(k * 1.08).toFixed(3)})`; } });
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      const s = d.current; if (!s || s.id !== e.pointerId) return;
-      d.current = null; if (s.raf) cancelAnimationFrame(s.raf);
-      s.el?.remove();
-      if (!s.moved) return;
-      suppressClick.current = true; setTimeout(() => (suppressClick.current = false), 0);
-      const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.rack-wrap');
-      onDrop(over ? rackHit.slotAt?.(e.clientX, e.clientY) ?? null : null);
-    },
-    onPointerCancel: () => { d.current?.el?.remove(); d.current = null; },
     onClickCapture: (e: React.MouseEvent) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault(); } },
   };
 }
@@ -360,7 +374,7 @@ export function GameTable() {
 
         {/* centre: pile, indicator, joker, pass */}
         <div className="centre" style={{ left: cx, top: cy }}>
-          <button className={`draw-pile ${canDraw ? 'can' : ''}`} onClick={doDraw} disabled={!canDraw} aria-label={t('btn_draw')} data-nav="pile" {...pileDrag}>
+          <button className={`draw-pile ${canDraw ? 'can' : ''}`} onClick={doDraw} aria-disabled={!canDraw} aria-label={t('btn_draw')} data-nav="pile" {...pileDrag}>
             <div className="tile back" style={{ width: 62, height: 86 }} /><div className="tile back l2" style={{ width: 62, height: 86 }} />
             <span className="count">{v.pile}</span>
           </button>
