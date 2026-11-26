@@ -611,3 +611,5 @@ body.tile-dragging .table-root .discard-stack.drop-hot { transform: scale(calc(v
   .sept-info { font-size: 12px; order: 3; flex-basis: 100%; }
 }
 @media (max-height: 520px) { .sept-seat.left, .sept-seat.right { top: 10%; } .sept-hand { padding-top: 14px; } }
+.sept-top .table-menu { width: auto; grid-column: auto; }
+.sept-top .table-menu-pop { bottom: auto; top: calc(100% + 6px); }
