@@ -36,6 +36,14 @@ export async function recordMatch(env: Env, x: RecordInput) {
   // ranking: winner first, then by score, eliminated later by elimination order (score 0)
   const order = g.seats.map((s) => s.seat).sort((a, b) => (a === g.winner ? -1 : b === g.winner ? 1 : g.seats[b].score - g.seats[a].score));
   const stmts: D1PreparedStatement[] = [];
+  // "Prietenii la joc": a registered player who completed a match with three registered friends
+  const reg = x.players.map((p) => (p?.registered && p.key?.startsWith('u:') ? p.key.slice(2) : null));
+  const friendCount = new Map<string, number>();
+  const ids = reg.filter((r): r is string => !!r);
+  if (ids.length >= 4) {
+    const fr = await env.DB.prepare(`SELECT user_a, user_b FROM friendships WHERE status = 'accepted' AND user_a IN (${ids.map(() => '?').join(',')}) AND user_b IN (${ids.map(() => '?').join(',')})`).bind(...ids, ...ids).all<{ user_a: string; user_b: string }>();
+    for (const f of fr.results) { friendCount.set(f.user_a, (friendCount.get(f.user_a) ?? 0) + 1); friendCount.set(f.user_b, (friendCount.get(f.user_b) ?? 0) + 1); }
+  }
   for (const s of g.seats) {
     const p = x.players[s.seat];
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO match_players VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(x.id, s.seat, p?.key ?? null, s.name, s.isBot ? 1 : 0,
@@ -49,9 +57,9 @@ export async function recordMatch(env: Env, x: RecordInput) {
       joker_closes = joker_closes + ?, pass_activations = pass_activations + ?, atu_declarations = atu_declarations + ?,
       current_streak = CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END,
       best_streak = MAX(best_streak, CASE WHEN ? = 1 THEN current_streak + 1 ELSE 0 END),
-      hosted = hosted + ?, full_tables = full_tables + ? ${catSql} WHERE player_key = ? AND mode = ?`)
+      hosted = hosted + ?, full_tables = full_tables + ?, friend_tables = friend_tables + ? ${catSql} WHERE player_key = ? AND mode = ?`)
       .bind(won, 1 - won, s.stats.roundsWon, s.stats.jokerCloses, s.stats.passActivations, s.stats.atuDeclarations, won, won,
-        p.key === x.hostKey ? 1 : 0, humans === 4 ? 1 : 0, ...cats.map(([, v]) => v), p.key, mode));
+        p.key === x.hostKey ? 1 : 0, humans === 4 ? 1 : 0, (friendCount.get(p.key.slice(2)) ?? 0) >= 3 ? 1 : 0, ...cats.map(([, v]) => v), p.key, mode));
   }
   await env.DB.batch(stmts);
   for (const p of x.players) if (p?.key) await awardAchievements(env, p.key);

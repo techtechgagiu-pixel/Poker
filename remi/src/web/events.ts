@@ -39,7 +39,7 @@ export function onGameView(prev: GameView | null, v: GameView | null, serverRack
     else if (e.type === 'pass') sfx('pass');
     else if (e.type === 'atu') sfx('atu');
     else if (e.type === 'close') sfx(v.result?.jokerDiscard ? 'joker' : 'win');
-    else if (e.type === 'match_end') sfx('match');
+    else if (e.type === 'match_end') { sfx('match'); setTimeout(checkAchievements, 2500); }
   }
   if (v.me && v.current === v.me.seat && prev.current !== v.current && (v.phase === 'WAITING_FOR_DRAW' || v.phase === 'WAITING_FOR_DISCARD')) {
     sfx('turn');
@@ -49,4 +49,20 @@ export function onGameView(prev: GameView | null, v: GameView | null, serverRack
     if (navigator.vibrate) try { navigator.vibrate(60); } catch { /* ignore */ }
   }
   if (v.me && st.hints.length && prev.me && prev.me.hand.length !== v.me.hand.length) st.set({ hints: [] });
+}
+
+/** Unobtrusive toast for newly earned (server-validated) achievements. */
+export async function checkAchievements() {
+  try {
+    const { api } = await import('./api');
+    const d = await api('/api/stats');
+    const now = (d.achievements as any[]).map((a) => `${a.key}/${a.tier}`);
+    let seen: string[] = []; try { seen = JSON.parse(localStorage.getItem('remi.ach') ?? '[]'); } catch { /* */ }
+    const fresh = now.filter((x) => !seen.includes(x));
+    localStorage.setItem('remi.ach', JSON.stringify(now));
+    if (!seen.length && localStorage.getItem('remi.achInit')) return;
+    localStorage.setItem('remi.achInit', '1');
+    const st = useStore.getState();
+    for (const f of fresh.slice(0, 3)) { st.toast(`🏆 ${st.settings.lang === 'ro' ? 'Realizare deblocată' : 'Achievement unlocked'}: ${f.replace(/_/g, ' ').replace('/', ' · ')}`, 'achievement'); sfx('achievement'); }
+  } catch { /* offline */ }
 }

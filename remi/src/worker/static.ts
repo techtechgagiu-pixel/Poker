@@ -7,7 +7,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Permissions-Policy': 'camera=(self), microphone=(self), fullscreen=(self), gamepad=(self), screen-wake-lock=(self), geolocation=(), payment=()',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://remi.noventra.ro wss://remi-dev.noventra.ro; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://remi.noventra.ro wss://remi-dev.noventra.ro https://cloudflareinsights.com; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
 };
 
 export async function serveStatic(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

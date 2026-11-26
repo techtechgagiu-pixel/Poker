@@ -186,6 +186,8 @@ export function GameTable() {
   };
   useEffect(() => { const h = () => setFs(!!document.fullscreenElement || document.body.classList.contains('immersive')); document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h); }, []);
   useEffect(() => { (screen.orientation as any)?.lock?.('landscape').catch(() => null); }, []);
+  // iOS Safari ignores touch-action for pinch: block zoom gestures on the table only
+  useEffect(() => { const stop = (e: Event) => e.preventDefault(); document.addEventListener('gesturestart', stop); return () => document.removeEventListener('gesturestart', stop); }, []);
 
   // ------------------------------------------------------------ keyboard & controller navigation
   const layout = useRack((s) => s.layout);
@@ -233,9 +235,10 @@ export function GameTable() {
   const cx = Wc / 2, feltTop = 66, feltBottom = H - 270;
   const cy = (feltTop + feltBottom) / 2;
   const discardSpot = (sp: Spot, count: number): [number, number] => {
-    if (count === 2) return sp === 'bottom' ? [cx + 300, cy + 10] : [cx - 360, cy - 70];
-    if (count === 3) return ({ bottom: [Wc - 440, feltBottom - 120], right: [cx - 30, feltTop + 30], left: [380, feltBottom - 120], top: [0, 0] } as any)[sp];
-    return ({ bottom: [Wc - 440, feltBottom - 120], right: [Wc - 440, feltTop + 40], top: [380, feltTop + 40], left: [380, feltBottom - 120] } as Record<Spot, [number, number]>)[sp];
+    if (count === 2) return sp === 'bottom' ? [cx + 300, cy + 10] : [cx - 380, cy - 10];
+    if (count === 3) return ({ bottom: [Wc - 440, feltBottom - 120], right: [cx - 300, feltTop + 112], left: [380, feltBottom - 120], top: [0, 0] } as any)[sp];
+    // top stacks sit below the discard-history bar so every stack stays clickable while it is open
+    return ({ bottom: [Wc - 440, feltBottom - 120], right: [Wc - 440, feltTop + 112], top: [380, feltTop + 112], left: [380, feltBottom - 120] } as Record<Spot, [number, number]>)[sp];
   };
   const activeCount = Object.keys(spots).length;
   const currentName = v.seats[v.current]?.name;

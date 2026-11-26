@@ -10,7 +10,7 @@
   "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "remi-backups" }, { "binding": "STATIC", "bucket_name": "remi-static" }],
   "triggers": { "crons": ["17 3 * * *"] },
   "observability": { "enabled": true },
-  "vars": { "ENVIRONMENT": "production", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com" },
+  "vars": { "ENVIRONMENT": "production", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com", "ACCESS_AUD": "5e549d30f92b5f3cc52654ac9ee58e8fc27dea5be89a0ce96f4f848826b02b8a" },
   "routes": [{ "pattern": "remi.noventra.ro", "custom_domain": true }],
   "env": {
     "staging": {
@@ -19,7 +19,7 @@
       "d1_databases": [{ "binding": "DB", "database_name": "remi-staging", "database_id": "2269e252-95b1-4c37-8081-afc4ace3d37a", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "remi-backups" }, { "binding": "STATIC", "bucket_name": "remi-static" }],
       "triggers": { "crons": [] },
-      "vars": { "ENVIRONMENT": "staging", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com" },
+      "vars": { "ENVIRONMENT": "staging", "ACCESS_TEAM_DOMAIN": "patient-dream-1afe.cloudflareaccess.com", "ACCESS_AUD": "0421862fb5984e75616c047014e39c01298085754504c39a937ad3901e5f8a41" },
       "routes": [{ "pattern": "remi-dev.noventra.ro", "custom_domain": true }]
     }
   }

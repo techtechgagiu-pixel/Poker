@@ -45,7 +45,7 @@ async function linkGuest(env: Env, req: Request, userId: string) {
   if (owned?.user_id && owned.user_id !== userId) return; // already linked to someone else
   await env.DB.prepare('INSERT INTO guests VALUES (?,?,?) ON CONFLICT(guest_hash) DO UPDATE SET user_id = excluded.user_id').bind(gh, userId, now()).run();
   const rows = await env.DB.prepare('SELECT * FROM player_stats WHERE player_key = ?').bind(gk).all<any>();
-  const cols = ['matches', 'wins', 'losses', 'rounds_won', 'normal_joker', 'normal_plain', 'sequences', 'triples', 'doubles', 'color', 'grand', 'joker_closes', 'pass_activations', 'atu_declarations', 'hosted', 'full_tables', 'tournaments_won'];
+  const cols = ['matches', 'wins', 'losses', 'rounds_won', 'normal_joker', 'normal_plain', 'sequences', 'triples', 'doubles', 'color', 'grand', 'joker_closes', 'pass_activations', 'atu_declarations', 'hosted', 'full_tables', 'tournaments_won', 'friend_tables'];
   const st: D1PreparedStatement[] = [];
   for (const r of rows.results) {
     st.push(env.DB.prepare('INSERT OR IGNORE INTO player_stats (player_key, mode) VALUES (?,?)').bind(uk, r.mode));
@@ -316,23 +316,27 @@ export function tables(players: string[]): string[][] {
   players.forEach((p, i) => out[i % k].push(p));
   return out;
 }
-function rotate<T>(a: T[], r: number) { const x = a.slice(1); for (let i = 0; i < r; i++) x.push(x.shift()!); return [a[0], ...x]; }
-
-/** Deterministic schedule. Round robin: rounds until every pair has shared a table. */
+/** Deterministic schedule. Round robin: greedy rounds (best of many seeded permutations) until every pair has shared a table. */
 export function schedule(format: Format, players: string[], rounds: number): string[][][] {
-  if (format === 'elimination') return [tables(players)];
-  if (format === 'groups') return [tables(players)];
+  if (format === 'elimination' || format === 'groups') return [tables(players)];
   const out: string[][][] = [];
   const met = new Set<string>();
   const pairs = (t: string[]) => t.flatMap((a, i) => t.slice(i + 1).map((b) => [a, b].sort().join('|')));
   const total = (players.length * (players.length - 1)) / 2;
-  for (let r = 0; r < 50; r++) {
-    // interleave a rotation so tables mix
-    const order = rotate(players, r);
-    const tb = tables(r % 2 ? order.map((_, i) => order[(i * 3) % order.length]).filter((v, i, a) => a.indexOf(v) === i) : order);
-    out.push(tb); tb.forEach((t) => pairs(t).forEach((p) => met.add(p)));
+  let seed = 7;
+  const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  for (let r = 0; r < 60; r++) {
+    let best: string[][] = tables(players); let bestGain = -1;
+    for (let k = 0; k < 200; k++) {
+      const perm = players.slice();
+      for (let i = perm.length - 1; i > 0; i--) { const j = rnd(i + 1); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+      const tb = tables(perm);
+      const gain = new Set(tb.flatMap(pairs).filter((p) => !met.has(p))).size;
+      if (gain > bestGain) { best = tb; bestGain = gain; }
+    }
+    out.push(best); best.forEach((t) => pairs(t).forEach((p) => met.add(p)));
     if (format === 'league' && out.length >= rounds) break;
-    if (format === 'roundrobin' && met.size >= total && out.length >= 1) break;
+    if (format === 'roundrobin' && met.size >= total) break;
   }
   return out;
 }
