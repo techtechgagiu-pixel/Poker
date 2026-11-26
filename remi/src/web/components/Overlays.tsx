@@ -169,7 +169,8 @@ export function SettingsForm({ compact }: { compact?: boolean }) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   useEffect(() => { navigator.mediaDevices?.enumerateDevices?.().then(setDevices).catch(() => null); }, []);
   const sel = <K extends keyof typeof s>(k: K, opts: [string, string][]) => (
-    <select value={String(s[k])} onChange={(e) => { const raw = e.target.value; const val: any = typeof s[k] === 'number' ? Number(raw) : raw; setS({ [k]: val } as any); if (k === 'rackRows') useRack.setState({ layout: reshape(useRack.getState().layout, val) }); }}>
+    <select value={String(s[k])} onChange={(e) => { const raw = e.target.value; const val: any = typeof s[k] === 'number' ? Number(raw) : raw; setS({ [k]: val } as any); if (k === 'rackRows') useRack.setState({ layout: reshape(useRack.getState().layout, val) });
+      if (k === 'tableZoom') useRack.setState({ layout: reshape(useRack.getState().layout, useStore.getState().settings.rackRows) }); }}>
       {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>
   );
@@ -189,12 +190,14 @@ export function SettingsForm({ compact }: { compact?: boolean }) {
         {chk('reducedMotion', 'reduced_motion')}{chk('highContrast', 'high_contrast')}
       </fieldset>
       <fieldset><legend>{t('settings_rack')}</legend>
+        <label>{t('table_zoom')} {sel('tableZoom', [['1', t('zoom_1')], ['2', t('zoom_2')], ['3', t('zoom_3')]])}</label>
         <label>{t('rows')} {sel('rackRows', [['2', '2'], ['3', '3']])}</label>
         <label>{t('tile_size')} {sel('tileSize', [['s', 'S'], ['m', 'M'], ['l', 'L']])}</label>
         <label className="rng">{t('tile_spacing')} <input type="range" min={0} max={10} step={1} value={s.tileSpacing} onChange={(e) => setS({ tileSpacing: Number(e.target.value) })} /></label>
       </fieldset>
       <fieldset><legend>{t('settings_audio')}</legend>
         {rng('master', 'master')}{rng('sfx', 'sfx')}{rng('music', 'music')}{rng('voice', 'voice_vol')}{rng('notif', 'notif_vol')}
+        <label>{t('music_track')} {sel('musicTrack', [['none', t('track_none')], ['piano', '🎹 ' + t('track_piano')], ['jazz', '🎷 ' + t('track_jazz')], ['guitar', '🎸 ' + t('track_guitar')], ['calm', '🌙 ' + t('track_calm')]])}</label>
         <label>{t('ambient')} {sel('ambient', [['fire', '🔥 Șemineu'], ['waves', '🌊 Valuri'], ['rain', '🌧 Ploaie'], ['lounge', '🎹 Lounge'], ['room', '🪑 Cameră']])}</label>
         {chk('mute', 'mute_all')}
       </fieldset>

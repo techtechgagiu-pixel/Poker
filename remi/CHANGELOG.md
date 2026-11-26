@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 — 2026-11-26
+- **Mărire masă** (3 niveluri: Normal / Mare / Foarte mare) din Setări sau butonul 🔍 de pe bara de sus: piese mai mari (+16% / +32%), jucători, centru, teancuri, butoane și ferestre mărite; suportul trece la 11 / 9 locuri pe rând ca să încapă.
+- **Melodii generative** (originale, sintetizate, fără repetare): Pian de seară, Jazz lounge, Chitară spaniolă, Ambient calm; se pot combina cu ambianța (valuri, ploaie, foc). Pornesc din glisorul „Muzică ambientală”.
+- Temă implicită: **Mahon regal**.
+
 ## 1.1.0 — 2026-11-26
 - **Cumul**: punctele pierdute de adversari se adună la câștigător (configurabil).
 - **Colț**: la fiecare remiză/refacere fiecare pune N puncte deoparte (N configurabil, opțional); colțul îl ia cine închide cu joker aruncat, Culoare, Duble sau după PASS (bife separate, Grand opțional).

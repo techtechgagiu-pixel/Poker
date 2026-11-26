@@ -2,7 +2,15 @@
 import { create } from 'zustand';
 import { tileFace, effective, isRealJoker, JokerInfo } from '../engine/tiles';
 
-export const COLS: Record<2 | 3, number> = { 2: 14, 3: 12 };
+import { useStore } from './store';
+
+/** Slots per row: fewer (bigger) tiles per row at higher magnification so the rack still fits the screen. */
+const COLS_BY_ZOOM: Record<2 | 3, [number, number, number]> = { 2: [14, 11, 9], 3: [12, 10, 8] };
+export function colsFor(rows: 2 | 3, zoom = useStore.getState().settings.tableZoom ?? 1): number { return COLS_BY_ZOOM[rows][(zoom ?? 1) - 1] ?? COLS_BY_ZOOM[rows][0]; }
+/** @deprecated use colsFor(rows) */
+export const COLS = { get 2() { return colsFor(2); }, get 3() { return colsFor(3); } } as Record<2 | 3, number>;
+export const ZOOM_MULT = [1, 1.16, 1.32];
+export const ZOOM_UI = [1, 1.15, 1.3];
 export type Layout = (number | null)[];
 
 interface RackState {

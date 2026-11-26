@@ -10,12 +10,16 @@ export interface Settings {
   master: number; music: number; sfx: number; voice: number; notif: number; mute: boolean; ambient: 'fire' | 'lounge' | 'room' | 'waves' | 'rain';
   diagnostics: boolean; pushToTalk: boolean; videoQuality: 'low' | 'balanced' | 'high'; mirror: boolean;
   micId: string; camId: string; speakerId: string; nickname: string; confirmJoker: boolean;
+  /** table magnification for low vision: 1 normal, 2 large, 3 extra large */
+  tableZoom: 1 | 2 | 3;
+  /** generative background music (independent from the ambience texture) */
+  musicTrack: 'none' | 'piano' | 'jazz' | 'guitar' | 'calm';
 }
 export const defaultSettings: Settings = {
   lang: 'ro', theme: 'mahogany', quality: 'auto', fps: 'auto', reducedMotion: false, highContrast: false, skipAnim: false,
   rackRows: 2, tileSize: 'l', tileSpacing: 4, snapping: true,
   master: 0.8, music: 0, sfx: 0.8, voice: 1, notif: 0.7, mute: false, ambient: 'fire',
-  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true,
+  diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true, tableZoom: 1, musicTrack: 'piano',
 };
 function loadSettings(): Settings {
   try {

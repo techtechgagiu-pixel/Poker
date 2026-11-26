@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore, useMedia } from '../store';
-import { useRack, arrange, pendingDrop } from '../rack';
+import { useRack, arrange, pendingDrop, colsFor, ZOOM_UI, reshape } from '../rack';
 import { useT } from '../i18n';
 import { act, send } from '../net';
 import { Tile, COLOR_SYMBOL } from './Tile';
-import { Rack, moveTiles, rackHit } from './Rack';
+import { Rack, moveTiles, rackHit, meAreaHeight } from './Rack';
 import { isRealJoker, tileFace } from '../../engine/tiles';
 import { findClose } from '../../engine/bot';
 import { detectWins, chooseWin } from '../../engine/validator';
@@ -162,8 +162,8 @@ function HistoryBar({ v, seat, onClose }: { v: GameView; seat: number; onClose: 
   );
 }
 
-const SPOT_POS = (w: number, h: number) => ({
-  avatar: { bottom: [150, h - 150], right: [w - 95, h * 0.42], top: [w / 2, 95], left: [95, h * 0.42] } as Record<Spot, number[]>,
+const SPOT_POS = (w: number, h: number, z = 1) => ({
+  avatar: { bottom: [150, h - 150], right: [w - 95 * z, h * 0.42], top: [w / 2, 95 * z], left: [95 * z, h * 0.42] } as Record<Spot, number[]>,
 });
 
 export function GameTable() {
@@ -267,7 +267,7 @@ export function GameTable() {
   const navRef = useRef({ focus, held, layout, canDraw, canTake, selTile });
   navRef.current = { focus, held, layout, canDraw, canTake, selTile };
   const nav = useCallback((cmd: string) => {
-    const n = navRef.current; const cols = settings.rackRows === 3 ? 12 : 16; const size = n.layout.length;
+    const n = navRef.current; const cols = colsFor(settings.rackRows, settings.tableZoom); const size = n.layout.length;
     const f = n.focus ?? 0;
     switch (cmd) {
       case 'left': setFocus((f - 1 + size) % size); break;
@@ -304,9 +304,12 @@ export function GameTable() {
   }, [nav]);
 
   // ------------------------------------------------------------ geometry
-  const P = SPOT_POS(Wc, H);
-  const cx = Wc / 2, feltTop = 66, feltBottom = H - 292;
-  const cy = (feltTop + feltBottom) / 2;
+  const meH = meAreaHeight(settings); const zf = ZOOM_UI[(settings.tableZoom ?? 1) - 1];
+  const P = SPOT_POS(Wc, H, zf);
+  const cx = Wc / 2, feltTop = 66, feltBottom = H - meH - 15;
+  // keep the centre (pile, Atu, joker) clear of the top player's badge, especially when magnified on short screens
+  const topBottom = 95 * zf + 110 * zf;
+  const cy = Math.min(Math.max((feltTop + feltBottom) / 2, zf > 1 ? topBottom + 64 * zf : 0), feltBottom - 64 * zf - 30);
   const discardSpot = (sp: Spot, count: number): [number, number] => {
     if (count === 2) return sp === 'bottom' ? [cx + 300, cy + 10] : [cx - 380, cy - 10];
     if (count === 3) return ({ bottom: [Wc - 440, feltBottom - 120], right: [cx - 300, feltTop + 112], left: [380, feltBottom - 120], top: [0, 0] } as any)[sp];
@@ -317,10 +320,10 @@ export function GameTable() {
   const currentName = v.seats[v.current]?.name;
 
   return (
-    <div className={`table-root theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
+    <div style={{ ['--z' as any]: zf }} className={`table-root zoom-${settings.tableZoom ?? 1} theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
       <div className="table-canvas" ref={canvas} style={{ width: Wc, height: H, transform: `translate(-50%, -50%) scale(${fit.s})` }}>
         <div className="wood-frame" />
-        <div className="felt" style={{ top: feltTop, bottom: 277 }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
+        <div className="felt" style={{ top: feltTop, bottom: meH }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
 
         {/* toolbar */}
         <div className="toolbar">
@@ -335,6 +338,7 @@ export function GameTable() {
             {cfg.chat && <button className="tb-btn" onClick={() => setChatOpen((x) => !x)} aria-label={t('chat')} data-nav="btn">💬<ChatBadge /></button>}
             <span className="tb-pill" title={t('players')}>👥 {room.members.filter((m) => m.role === 'player').length}</span>
             <span className="tb-pill" title={t('spectators')}>👁 {room.members.filter((m) => m.role === 'spectator').length}</span>
+            <button className="tb-btn gold zoom-btn" onClick={() => { const z = ((settings.tableZoom ?? 1) % 3 + 1) as 1 | 2 | 3; useStore.getState().setSettings({ tableZoom: z }); useRack.setState({ layout: reshape(useRack.getState().layout, settings.rackRows) }); }} title={t('table_zoom')} aria-label={t('table_zoom')} data-nav="btn">🔍<small>{settings.tableZoom ?? 1}</small></button>
             <button className="tb-btn gold" onClick={toggleFs} aria-label={t('fullscreen')} title={t('fullscreen')} data-nav="btn">{fs ? <IconMin /> : <IconMax />}</button>
             <button className="tb-btn" onClick={() => setSettingsOpen((x) => !x)} aria-label={t('btn_settings')} data-nav="btn">⚙</button>
           </div>
@@ -349,7 +353,7 @@ export function GameTable() {
           if (isBottom) return null; // the local player's badge lives in the rack area below
           return (
             <div key={s.seat}>
-              {settings.theme !== 'arena' && <HiddenRack spot={sp} count={s.tiles} x={ax} y={ay} w={Wc} />}
+              {settings.theme !== 'arena' && (settings.tableZoom ?? 1) === 1 && <HiddenRack spot={sp} count={s.tiles} x={ax} y={ay} w={Wc} />}
               <div className={`seat-badge spot-${sp} ${v.current === s.seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`} style={{ left: ax, top: ay }}>
                 <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
                 <span className="star-badge" title="Runde câștigate">{s.stats.roundsWon}</span>
@@ -397,14 +401,14 @@ export function GameTable() {
           )}
         </div>
         {v.pass.active && <div className="pass-banner">{t('pass_active')}{v.pass.turnsLeft !== null ? ` · ${v.pass.turnsLeft}` : ''}</div>}
-        <div className="turn-banner" style={{ left: cx, top: cy + 92 }}>
+        <div className="turn-banner" style={{ left: cx, top: Math.min(cy + 70 * zf + 20, feltBottom - 34) }}>
           {v.phase.startsWith('WAITING') ? (myTurn ? <b className="you">{t('your_turn')}</b> : <span>{t('turn_of')} <b>{currentName}</b></span>) : null}
         </div>
 
         {historySeat !== null && <HistoryBar v={v} seat={historySeat} onClose={() => set({ historySeat: null })} />}
 
         {/* local player area */}
-        <div className="me-area" style={{ top: H - 277, width: Wc }}>
+        <div className="me-area" style={{ top: H - meH, width: Wc, height: meH }}>
           <div className="me-left">
             <MyBadge v={v} seat={perspective} />
             <TurnTimer deadline={v.turnDeadline} total={cfg.turnSeconds} paused={v.paused} />

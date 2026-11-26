@@ -4,13 +4,23 @@
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '../store';
-import { useRack, COLS, Layout } from '../rack';
+import { useRack, colsFor, ZOOM_MULT, Layout } from '../rack';
 import { insertTiles, insertionIndex } from '../rackOps';
 import { Tile } from './Tile';
 import { sfx } from '../sound';
 import type { JokerInfo } from '../../engine/tiles';
 
 export const TILE_DIM = { s: [58, 80], m: [66, 92], l: [74, 102] } as const;
+/** Rack tile size for the current tile size, rows and table magnification. */
+export function tileDims(s: { tileSize: 's' | 'm' | 'l'; rackRows: 2 | 3; tableZoom?: 1 | 2 | 3 }) {
+  const base = TILE_DIM[s.tileSize]; const k = (s.rackRows === 3 ? 0.74 : 1) * ZOOM_MULT[(s.tableZoom ?? 1) - 1];
+  return { tw: Math.round(base[0] * k), th: Math.round(base[1] * k) };
+}
+/** Height of the player's area under the felt. */
+export function meAreaHeight(s: { tileSize: 's' | 'm' | 'l'; rackRows: 2 | 3; tableZoom?: 1 | 2 | 3 }) {
+  const { th } = tileDims(s);
+  return Math.max(277, s.rackRows * (th + 10) - 10 + 28 + 40);
+}
 
 interface Props { joker: JokerInfo; scale: () => number; onDropDiscard: (tile: number) => boolean; focusIndex: number | null; heldIndex: number | null; hintTiles: Set<number> }
 
@@ -24,10 +34,8 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
   const layout = useRack((s) => s.layout);
   const settings = useStore((s) => s.settings);
   const selected = useStore((s) => s.selected);
-  const rows = settings.rackRows; const cols = COLS[rows];
-  const base = TILE_DIM[settings.tileSize];
-  const k = rows === 3 ? 0.74 : 1;
-  const tw = Math.round(base[0] * k), th = Math.round(base[1] * k);
+  const rows = settings.rackRows; const cols = colsFor(rows, settings.tableZoom);
+  const { tw, th } = tileDims(settings);
   const gap = settings.tileSpacing;
   const pad = 14;
   const width = cols * (tw + gap) - gap + pad * 2;

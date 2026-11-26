@@ -12,6 +12,10 @@ function ac() {
 // unlock on first gesture (autoplay policies)
 ['pointerdown', 'keydown'].forEach((e) => window.addEventListener(e, () => { ac(); updateAmbient(); }, { once: true, passive: true }));
 
+/** Shared audio graph for the music engine. */
+export function audioOut() { const c = ac(); return { ctx: c, master: master! }; }
+export function audioReady() { return !!ctx; }
+
 function vol(kind: 'sfx' | 'notif') { const s = useStore.getState().settings; return s.mute ? 0 : s.master * s[kind]; }
 
 function noiseBuffer(c: AudioContext, seconds: number) {
