@@ -6,7 +6,16 @@ import { useStore, useMedia, MediaPeer } from './store';
 import { onRtc, send } from './net';
 import { roomTokens } from './api';
 
-const pcs = new Map<string, { pc: RTCPeerConnection; makingOffer: boolean; ignoreOffer: boolean; analyser?: AnalyserNode }>();
+/**
+ * Connection per remote player. Roles are FIXED per pair: the player with the smaller id is the offerer and the only one
+ * who ever makes offers; the other only answers. Both audio and video lines are created sendrecv from the start, so
+ * turning a mic/camera on or off later just swaps tracks (replaceTrack) — no renegotiation, hence no glare between
+ * players who toggle at the same time (which broke video in 4-player calls).
+ */
+type Entry = { pc: RTCPeerConnection; gen: string; remoteGen: string | null; offerer: boolean; analyser?: AnalyserNode; helloTimer?: number; pending: RTCIceCandidateInit[] };
+const pcs = new Map<string, Entry>();
+const genId = () => Math.random().toString(36).slice(2, 10);
+const iAmOfferer = (pid: string) => myPid() < pid;
 let iceServers: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 let audioCtx: AudioContext | null = null;
 let speakTimer: number | undefined;
@@ -44,21 +53,14 @@ export function syncPeers() {
 }
 useStore.subscribe((s, p) => { if (s.room?.members !== p.room?.members) syncPeers(); });
 
-function createPc(pid: string) {
+function createPc(pid: string, remoteGen: string | null = null) {
   const pc = new RTCPeerConnection({ iceServers });
-  const entry = { pc, makingOffer: false, ignoreOffer: false } as { pc: RTCPeerConnection; makingOffer: boolean; ignoreOffer: boolean; analyser?: AnalyserNode };
+  const entry: Entry = { pc, gen: genId(), remoteGen, offerer: iAmOfferer(pid), pending: [] };
   pcs.set(pid, entry);
-  const local = useMedia.getState().local;
-  if (local) for (const tr of local.getTracks()) pc.addTrack(tr, local);
-  else { pc.addTransceiver('audio', { direction: 'recvonly' }); pc.addTransceiver('video', { direction: 'recvonly' }); }
-  pc.onicecandidate = (e) => { if (e.candidate) send({ t: 'rtc', to: pid, data: { candidate: e.candidate.toJSON() } }); };
-  pc.onnegotiationneeded = async () => {
-    try { entry.makingOffer = true; await pc.setLocalDescription(); send({ t: 'rtc', to: pid, data: { description: pc.localDescription } }); }
-    catch { /* ignore */ } finally { entry.makingOffer = false; }
-  };
+  const sig = (data: Record<string, unknown>) => send({ t: 'rtc', to: pid, data: { gen: entry.gen, ...data } });
+  pc.onicecandidate = (e) => { if (e.candidate) sig({ candidate: e.candidate.toJSON() }); };
   pc.ontrack = (e) => {
-    // ONE stream per remote player that collects every track they send. (A track added later with replaceTrack
-    // arrives without a stream: it used to replace the player's stream, which made their video vanish when audio started.)
+    // ONE stream per remote player that collects every track they send
     const stream = useMedia.getState().peers[pid]?.stream ?? new MediaStream();
     if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track);
     const refresh = () => patchPeer(pid, { stream, rev: ((useMedia.getState().peers[pid] as any)?.rev ?? 0) + 1 } as any);
@@ -68,9 +70,37 @@ function createPc(pid: string) {
   };
   pc.onconnectionstatechange = () => {
     patchPeer(pid, { state: pc.connectionState });
-    if (pc.connectionState === 'failed') { try { pc.restartIce(); } catch { closePc(pid); setTimeout(syncPeers, 1500); } }
+    if (pc.connectionState === 'failed') { if (entry.offerer) { try { pc.restartIce(); } catch { /* recreated by syncPeers */ } } else sig({ restart: true }); }
   };
+  if (entry.offerer) {
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    pc.addTransceiver('video', { direction: 'sendrecv' });
+    pc.onnegotiationneeded = async () => { try { await pc.setLocalDescription(); sig({ description: pc.localDescription }); } catch { /* retried on restart */ } };
+    void attachLocal(entry);
+  } else {
+    // wait for the other side's offer; ask for it until it arrives (messages can be lost during reconnects)
+    const ask = () => { if (!pc.remoteDescription && !entry.remoteGen) sig({ hello: true }); else if (!pc.remoteDescription) sig({ hello: true }); };
+    ask();
+    entry.helloTimer = window.setInterval(() => { if (pc.remoteDescription || !pcs.has(pid) || pcs.get(pid) !== entry) clearInterval(entry.helloTimer); else ask(); }, 2500);
+  }
   patchPeer(pid, { state: 'connecting' });
+}
+
+/** Put my current microphone/camera tracks on the connection's fixed audio/video lines (no renegotiation needed). */
+async function attachLocal(entry: Entry) {
+  const s = useStore.getState().settings; const local = useMedia.getState().local;
+  for (const t of entry.pc.getTransceivers()) {
+    const kind = t.receiver.track.kind as 'audio' | 'video';
+    const track = local?.getTracks().find((x) => x.kind === kind && x.readyState === 'live') ?? null;
+    if (t.direction !== 'sendrecv' && t.currentDirection !== 'stopped') { try { t.direction = 'sendrecv'; } catch { /* closed */ } }
+    await t.sender.replaceTrack(track).catch(() => null);
+    if (kind === 'video' && track) {
+      const q = VIDEO[s.videoQuality]; const p = t.sender.getParameters();
+      p.encodings = [{ ...(p.encodings?.[0] ?? {}), maxBitrate: Math.round(q.br / Math.max(1, pcs.size / 2)), maxFramerate: q.fps }];
+      (p as any).degradationPreference = 'maintain-framerate';
+      await t.sender.setParameters(p).catch(() => null);
+    }
+  }
 }
 
 /** Signalling is always listened to and processed strictly in order, per peer. */
@@ -80,25 +110,45 @@ unsub = onRtc((from, data) => {
   const next = prev.then(() => onSignal(from, data)).catch(() => undefined);
   sigQueue.set(from, next);
 }) as any;
-const offerSince = new Map<string, number>();
+
+async function flushCandidates(entry: Entry) {
+  while (entry.pending.length && entry.pc.remoteDescription) { const c = entry.pending.shift()!; try { await entry.pc.addIceCandidate(c); } catch { /* stale */ } }
+}
 
 async function onSignal(from: string, data: any) {
   const room = useStore.getState().room;
   if (!room || (!room.config.voice && !room.config.video) || useStore.getState().you?.role !== 'player') return;
   await ensureActive();
+  const offerer = iAmOfferer(from);
   let entry = pcs.get(from);
-  if (!entry) { createPc(from); entry = pcs.get(from)!; }
-  const { pc } = entry;
-  const polite = myPid() > from;
+  const fresh = (e: Entry | undefined) => !!e && e.remoteGen === data.gen;
+  // the other side started a NEW connection object (page reload, reconnect): drop ours and pair with the new one
+  if (entry && entry.remoteGen && entry.remoteGen !== data.gen && (data.hello || data.description?.type === 'offer')) { closePc(from); entry = undefined; }
+  if (!entry) { createPc(from, data.gen); entry = pcs.get(from)!; }
+  if (!entry.remoteGen) entry.remoteGen = data.gen;
+  if (!fresh(entry)) return; // stale message from an older connection
+  const pc = entry.pc;
   try {
-    if (data.description) {
-      const collision = data.description.type === 'offer' && (entry.makingOffer || pc.signalingState !== 'stable');
-      entry.ignoreOffer = !polite && collision;
-      if (entry.ignoreOffer) return;
-      await pc.setRemoteDescription(data.description);
-      if (data.description.type === 'offer') { await pc.setLocalDescription(); send({ t: 'rtc', to: from, data: { description: pc.localDescription } }); }
+    if (data.hello) {
+      // answerer asked for an offer: (re)send ours if it is still waiting for an answer
+      if (offerer && pc.signalingState === 'have-local-offer' && pc.localDescription) send({ t: 'rtc', to: from, data: { gen: entry.gen, description: pc.localDescription } });
+    } else if (data.restart) {
+      if (offerer) pc.restartIce();
+    } else if (data.description) {
+      const d = data.description as RTCSessionDescriptionInit;
+      if (d.type === 'offer' && !offerer) {
+        await pc.setRemoteDescription(d);
+        await attachLocal(entry); // sets every line to sendrecv and puts my tracks on them
+        await pc.setLocalDescription();
+        send({ t: 'rtc', to: from, data: { gen: entry.gen, description: pc.localDescription } });
+        if (entry.helloTimer) clearInterval(entry.helloTimer);
+        await flushCandidates(entry);
+      } else if (d.type === 'answer' && offerer && pc.signalingState === 'have-local-offer') {
+        await pc.setRemoteDescription(d);
+        await flushCandidates(entry);
+      }
     } else if (data.candidate) {
-      try { await pc.addIceCandidate(data.candidate); } catch (e) { if (!entry.ignoreOffer) throw e; }
+      if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch { /* stale candidate */ } } else entry.pending.push(data.candidate);
     }
   } catch (e) { useMedia.setState({ error: String(e) }); }
 }
@@ -121,27 +171,7 @@ function remoteLevel(e: { pc: RTCPeerConnection; analyser?: AnalyserNode }): num
   if (!lv && e.analyser) lv = level(e.analyser);
   return lv;
 }
-/** Renegotiate if a local track was added during another negotiation and never made it into the session. */
-let lastHeal = 0;
-function healNegotiation() {
-  const now = performance.now(); if (now - lastHeal < 1500) return; lastHeal = now;
-  for (const [pid, e] of pcs) {
-    const pc = e.pc;
-    if (pc.signalingState === 'have-local-offer') {
-      // an offer nobody answered (e.g. lost during a reconnect): roll back and offer again
-      const since = offerSince.get(pid) ?? now; offerSince.set(pid, since);
-      if (now - since > 5000) { offerSince.delete(pid); pc.setLocalDescription({ type: 'rollback' }).then(() => { lastHeal = 0; }).catch(() => null); }
-      continue;
-    }
-    offerSince.delete(pid);
-    if (pc.signalingState !== 'stable' || e.makingOffer) continue;
-    const stale = pc.getTransceivers().some((t) => t.sender.track && !(t.currentDirection ?? '').includes('send'));
-    if (!stale) continue;
-    (async () => { try { e.makingOffer = true; await pc.setLocalDescription(); send({ t: 'rtc', to: pid, data: { description: pc.localDescription } }); } catch { /* retry next tick */ } finally { e.makingOffer = false; } })();
-  }
-}
 function detectSpeakers() {
-  healNegotiation();
   const peers = useMedia.getState().peers;
   let changed = false; const next = { ...peers };
   if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => null);
@@ -235,24 +265,8 @@ async function setLocal(mic: boolean, cam: boolean) {
   useMedia.setState({ local: stream && stream.getTracks().length ? stream : null, micOn, camOn });
   send({ t: 'media', mic: micOn, cam: camOn });
   await ensureActive();
-  // (re)attach tracks to every connection
-  for (const [, { pc }] of pcs) {
-    const senders = pc.getSenders();
-    for (const kind of ['audio', 'video'] as const) {
-      const track = stream?.getTracks().find((x) => x.kind === kind) ?? null;
-      const sender = senders.find((x) => x.track?.kind === kind) ?? pc.getTransceivers().find((tr) => tr.receiver.track.kind === kind)?.sender;
-      if (sender) {
-        await sender.replaceTrack(track).catch(() => null);
-        const tr = pc.getTransceivers().find((x) => x.sender === sender); if (tr && track) tr.direction = 'sendrecv';
-        if (kind === 'video' && track) {
-          const q = VIDEO[s.videoQuality]; const p = sender.getParameters();
-          p.encodings = [{ ...(p.encodings?.[0] ?? {}), maxBitrate: Math.round(q.br / Math.max(1, pcs.size / 2)), maxFramerate: q.fps }];
-          (p as any).degradationPreference = 'maintain-framerate';
-          await sender.setParameters(p).catch(() => null);
-        }
-      } else if (track && stream) pc.addTrack(track, stream);
-    }
-  }
+  // put the new tracks on every connection's fixed lines
+  for (const e of pcs.values()) await attachLocal(e);
   // the previous capture is released only now that the new tracks are on every connection
   if (old && old !== stream) for (const tr of old.getTracks()) if (!stream?.getTracks().includes(tr)) tr.stop();
 }
@@ -276,7 +290,7 @@ export function muteAll(muted: boolean) { const peers = useMedia.getState().peer
 window.addEventListener('keydown', (e) => { if (e.code === 'Space' && useStore.getState().settings.pushToTalk && !(e.target as HTMLElement)?.closest('input,textarea')) useMedia.getState().local?.getAudioTracks().forEach((t) => (t.enabled = true)); });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space' && useStore.getState().settings.pushToTalk) useMedia.getState().local?.getAudioTracks().forEach((t) => (t.enabled = false)); });
 
-function closePc(pid: string) { const e = pcs.get(pid); if (e) { e.pc.close(); pcs.delete(pid); } const p = { ...useMedia.getState().peers }; delete p[pid]; useMedia.setState({ peers: p }); }
+function closePc(pid: string) { const e = pcs.get(pid); if (e) { if (e.helloTimer) clearInterval(e.helloTimer); e.pc.close(); pcs.delete(pid); } const p = { ...useMedia.getState().peers }; delete p[pid]; useMedia.setState({ peers: p }); }
 
 /** Stop all tracks and connections (leaving the room). */
 export function stopMedia() {
