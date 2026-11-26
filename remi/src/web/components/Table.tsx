@@ -210,10 +210,10 @@ export function GameTable() {
 
   // ------------------------------------------------------------ actions
   const doDiscard = useCallback((tile: number | null) => {
-    if (tile === null) { toast(t('select_tile')); return; }
-    if (!canDiscard) return;
-    if (isRealJoker(tile, v.joker) && settings.confirmJoker && cfg.confirmJokerDiscard && !confirm(t('confirm_joker'))) return;
-    act({ type: 'discard', tile }); set({ selected: [] });
+    if (tile === null) { toast(t('select_tile')); return false; }
+    if (!canDiscard) return false;
+    if (isRealJoker(tile, v.joker) && settings.confirmJoker && cfg.confirmJokerDiscard && !confirm(t('confirm_joker'))) return false;
+    const sent = act({ type: 'discard', tile }); set({ selected: [] }); return sent;
   }, [canDiscard, v.joker, settings.confirmJoker]);
   const doClose = () => {
     if (!canDiscard || !winning) return;

@@ -55,6 +55,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await page.mouse.up();
       await page.waitForFunction((n) => window.__remiStore.getState().game.me.hand.length === n + 1, n0, { timeout: 8000 }).catch(() => null);
       ok(`[${tag}] drag from the pile onto the rack draws a tile`, (await page.evaluate(() => window.__remiStore.getState().game.me.hand.length)) === n0 + 1 && (await page.locator('.drag-ghost').count()) === 0);
+      // 6) discarding does not need pixel precision: drop well beside the stack (not on it)
+      await page.waitForFunction(() => { const g = window.__remiStore.getState().game; return g.current === g.me.seat && g.phase === 'WAITING_FOR_DISCARD'; }, null, { timeout: 10000 });
+      const st = await page.locator('.discard-stack[data-drop="discard"]').boundingBox();
+      const k = await page.evaluate(() => { const c = document.querySelector('.table-canvas'); return c.getBoundingClientRect().width / c.offsetWidth; });
+      const tx = st.x - 110 * k, ty = st.y + st.height / 2 - 90 * k; // ~110 logical px left and above the stack
+      const onStack = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.discard-stack'), [tx, ty]);
+      const t0 = await page.locator('.rack-tile').last().boundingBox();
+      const id = await page.locator('.rack-tile [data-tile]').last().getAttribute('data-tile');
+      await page.mouse.move(t0.x + 10, t0.y + 10); await page.mouse.down();
+      for (let i = 1; i <= 20; i++) await page.mouse.move(t0.x + 10 + (tx - t0.x - 10) * i / 20, t0.y + 10 + (ty - t0.y - 10) * i / 20);
+      const hot = await page.locator('.discard-stack.drop-hot').count();
+      await page.mouse.up();
+      await page.waitForFunction((id) => { const g = window.__remiStore.getState().game; return g.discards[g.me.seat].includes(Number(id)); }, id, { timeout: 8000 }).catch(() => null);
+      const g2 = await page.evaluate(() => window.__remiStore.getState().game);
+      ok(`[${tag}] drop near (not on) the stack discards the tile; zone highlighted while dragging`, !onStack && hot === 1 && g2.discards[g2.me.seat].includes(Number(id)), `onStack=${onStack} hot=${hot}`);
       await ctx.close();
     }
   } catch (e) { ok('drag cleanup run', false, String(e && e.message || e).split('\n')[0]); }

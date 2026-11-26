@@ -344,3 +344,9 @@ body.controller-mode [data-nav]:focus { outline: 4px solid var(--gold); }
 .discard-stack.eligible, .draw-pile.can { cursor: grab; touch-action: none; }
 .discard-stack .top-wrap { position: relative; z-index: 1; }
 .draw-pile[aria-disabled="true"] { cursor: default; }
+
+/* large discard target while a tile is being dragged */
+.discard-stack[data-drop]::before { content: ''; position: absolute; inset: -150px -110px -20px -150px; border-radius: 28px; border: 3px dashed transparent; pointer-events: none; transition: border-color .15s, background-color .15s; }
+body.tile-dragging .discard-stack[data-drop]::before { border-color: rgba(226,184,102,.45); background: rgba(226,184,102,.06); }
+body.tile-dragging .discard-stack.drop-hot::before { border-color: var(--gold); background: rgba(226,184,102,.16); }
+body.tile-dragging .discard-stack.drop-hot { transform: scale(1.08); box-shadow: 0 0 26px rgba(226,184,102,.8); }
