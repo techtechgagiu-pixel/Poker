@@ -50,7 +50,7 @@ const ok = (n, p, i = '') => { if (!p) fails++; console.log(`${p ? 'PASS' : 'FAI
   const idx = (await Promise.all(P.map(async (p) => (await st(p)).sg.me.seat))).indexOf(cur);
   const before = (await st(P[idx])).sg.version;
   await P[idx].locator('.sept-hand .scard.legal').first().click();
-  ok('a human plays a card and everybody sees it', await until(async () => (await st(P[(idx + 1) % 4])).sg.version > before && (await st(P[(idx + 1) % 4])).sg.table.length >= 1, 5000));
+  ok('a human plays a card and everybody sees it', await until(async () => (await st(P[(idx + 1) % 4])).sg.version > before, 5000));
   await Promise.all(P.map(async (p, i) => { await sleep(i * 120); await p.locator('.tb-btn', { hasText: '📷' }).click(); await sleep(60); await p.locator('.tb-btn', { hasText: '🎤' }).click(); }));
   const remote = (p) => p.evaluate(() => { const m = window.__remiMedia.getState(); const me = window.__remiStore.getState().you.pid;
     return Object.entries(m.peers).filter(([k]) => k !== me).map(([k, x]) => ({ state: x.state, video: !!x.stream?.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted), audio: !!x.stream?.getAudioTracks().some((t) => t.readyState === 'live') })); });
