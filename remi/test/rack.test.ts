@@ -51,3 +51,12 @@ describe('rack insertion', () => {
     expect(insertionIndex(70, 10, 60, 80, 4, 10, C, 1, l)).toBe(1);
   });
 });
+
+import { effective } from '../src/engine/tiles';
+describe('joker stays hidden in arrangement', () => {
+  it('with a joker that matches nothing, a real joker is an ordinary tile and a false joker sorts last', () => {
+    const NO = { color: 9, num: 99 } as any;
+    expect(effective(7, NO)).toEqual({ color: 0, num: 8 }); // red 8 stays red 8 even if it is the real joker
+    expect(effective(104, NO)!.num).toBe(99);
+  });
+});

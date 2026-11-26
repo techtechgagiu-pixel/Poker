@@ -75,7 +75,15 @@ export function reconcile(l: Layout, hand: number[], rows: 2 | 3): Layout {
   return out;
 }
 
+/**
+ * Outside training the arrangement must not reveal the real joker: it is sorted as the ordinary tile it is
+ * (a joker that matches nothing), and false jokers (★) go to the end of the row.
+ */
+const NO_JOKER = { color: 9, num: 99 } as unknown as JokerInfo;
+export function arrangeJoker(j: JokerInfo): JokerInfo { return useStore.getState().room?.config.training ? j : NO_JOKER; }
+
 export function initialLayout(hand: number[], rows: 2 | 3, j: JokerInfo): Layout {
+  j = arrangeJoker(j);
   return arrange(hand, rows, j, 'auto');
 }
 

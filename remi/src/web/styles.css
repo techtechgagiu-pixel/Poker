@@ -485,3 +485,8 @@ body.tile-dragging .table-root .discard-stack.drop-hot { transform: scale(calc(v
 .btn-auto { flex: 1; min-height: 58px; border-radius: 10px; font-weight: 800; border: 1px solid rgba(255,255,255,.15); background: linear-gradient(180deg, #4a5a6a, #2a3440); color: #e8f1ff; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 3px 0 rgba(0,0,0,.35); }
 .btn-auto.on { background: linear-gradient(180deg, #2fa0e0, #1662a0); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
 .sb-tag.auto { background: #1662a0; color: #fff; font-weight: 800; }
+
+/* the real joker is never revealed on screen (players must recognise it from the Atu); hints only in training */
+.table-root:not(.joker-hints) .jbadge { display: none; }
+.table-root:not(.joker-hints) .tile.real-joker { background: linear-gradient(180deg, var(--ivory), var(--ivory-2)); }
+.theme-arena.table-root:not(.joker-hints) .tile.real-joker { background: linear-gradient(180deg, #fffdf6, #f1e9d4); }

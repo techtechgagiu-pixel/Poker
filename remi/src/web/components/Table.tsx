@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore, useMedia } from '../store';
-import { useRack, arrange, pendingDrop, colsFor, ZOOM_UI, reshape } from '../rack';
+import { useRack, arrange, arrangeJoker, pendingDrop, colsFor, ZOOM_UI, reshape } from '../rack';
 import { useT } from '../i18n';
 import { act, send } from '../net';
 import { Tile, COLOR_SYMBOL } from './Tile';
@@ -231,7 +231,7 @@ export function GameTable() {
   const doAtu = () => { if (me?.canAtu && !pending) act({ type: 'atu' }); };
   const sortBy = (mode: Parameters<typeof arrange>[3]) => {
     if (!me) return;
-    useRack.getState().set(arrange(me.hand, settings.rackRows, v.joker, mode)); setSortOpen(false); sfx('snap');
+    useRack.getState().set(arrange(me.hand, settings.rackRows, arrangeJoker(v.joker), mode)); setSortOpen(false); sfx('snap');
   };
   const toggleFs = async () => {
     try {
@@ -320,7 +320,7 @@ export function GameTable() {
   const currentName = v.seats[v.current]?.name;
 
   return (
-    <div style={{ ['--z' as any]: zf }} className={`table-root zoom-${settings.tableZoom ?? 1} theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
+    <div style={{ ['--z' as any]: zf }} className={`table-root ${cfg.training ? 'joker-hints' : ''} zoom-${settings.tableZoom ?? 1} theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
       <div className="table-canvas" ref={canvas} style={{ width: Wc, height: H, transform: `translate(-50%, -50%) scale(${fit.s})` }}>
         <div className="wood-frame" />
         <div className="felt" style={{ top: feltTop, bottom: meH }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
@@ -388,10 +388,12 @@ export function GameTable() {
             <Tile id={v.indicator} w={58} h={80} />
             <span className="lbl">{t('indicator')}</span>
           </div>
+{cfg.training && (
           <div className="joker-info" title={t('joker')}>
             <span className="lbl gold">{t('joker')}</span>
             <span className={`jk c-${['red', 'blue', 'yellow', 'black'][v.joker.color]}`}>{v.joker.num}<small>{COLOR_SYMBOL[v.joker.color]}</small></span>
           </div>
+          )}
           {cfg.corner?.enabled && <div className={`corner-pot ${v.pot ? 'full' : ''}`} title={t('corner')}><span className="lbl">{t('corner')}</span><b>{v.pot}</b></div>}
           {cfg.pass.enabled && (
             <div className={`pass-area ${v.pass.active ? 'active' : ''}`}>
