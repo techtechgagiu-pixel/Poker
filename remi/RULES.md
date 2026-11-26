@@ -70,6 +70,12 @@ Cine are a doua piesă identică cu Atu o poate arăta înainte să-și termine 
 ## 9. Alte reguli de masă *(config)*
 Spectatori, chat, voce, video, pauză prin vot (aprobare unanimă a oamenilor activi conectați, vot 15 s, pauză max. 5 min, 2 cereri/jucător), timp de reconectare (15 s) și preluare de către bot, pauză între runde (8 s), confirmare la aruncarea jokerului, dificultatea boților, completare cu boți.
 
+## 9a. Intrarea după începerea partidei
+Linkul de invitație rămâne valabil și în timpul partidei:
+- dacă la masă este un **bot**, noul jucător îi **preia locul** (cu piesele și punctajul botului) și continuă de la tura curentă;
+- dacă nu mai e niciun loc, intră ca **spectator la coadă**; primul din coadă primește automat locul eliberat când un jucător apasă „Părăsește locul” (un bot îl ține până atunci) sau la revanșă;
+- spectatorii pot intra/ieși oricând din coadă („Vreau să joc”); locurile jucătorilor deconectați **nu** se dau altcuiva (ei au dreptul să revină).
+
 ## 9b. Mese live *(config `listed`, implicit DA)*
 Mesele în desfășurare apar în lista „Mese live”; oricine poate intra ca spectator (doar informații publice: scoruri, piese aruncate, Atu, PASS — niciodată piesele ascunse). Gazda poate scoate masa din listă.
 

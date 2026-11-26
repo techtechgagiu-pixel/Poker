@@ -424,7 +424,7 @@ export function GameTable() {
           {me ? (
             <Rack joker={v.joker} scale={fit.get} onDropDiscard={(id) => doDiscard(id)} focusIndex={focus} heldIndex={held} hintTiles={hintTiles} />
           ) : (
-            <div className="spectator-rack">👁 {t('spectate')} · {v.seats[perspective]?.name}: {v.seats[perspective]?.tiles} 🀫</div>
+            <SpectatorPanel name={v.seats[perspective]?.name} tiles={v.seats[perspective]?.tiles} />
           )}
           {me && (
             <div className="controls">
@@ -489,8 +489,23 @@ function TableMenu({ v, cfg }: { v: GameView; cfg: RoomConfig }) {
           {cfg.pauseVote.enabled && <button onClick={() => pick(v.paused ? 'resume' : 'pause')}>{v.paused ? '▶ ' + t('resume') : '⏸ ' + t('request_pause')}</button>}
           {cfg.drawVote !== false && <button onClick={() => pick('draw')}>🤝 {t('request_draw')}</button>}
           <button onClick={() => pick('save')}>💾 {t('save_match')}</button>
+          <button onClick={() => { if (confirm(t('leave_seat_confirm'))) { send({ t: 'leaveSeat' }); setOpen(false); } }}>🚪 {t('leave_seat_match')}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Spectator area: shows the queue position and lets the spectator ask for a seat. */
+function SpectatorPanel({ name, tiles }: { name?: string; tiles?: number }) {
+  const t = useT();
+  const me = useStore((s) => s.room?.members.find((m) => m.pid === s.you?.pid));
+  const canQueue = useStore((s) => !!s.room && s.room.mode !== 'training');
+  return (
+    <div className="spectator-rack">
+      <div>👁 {t('spectate')} · {name}: {tiles} 🀫</div>
+      {me?.queued ? <div className="queue-info">⏳ {t('in_queue')} <b>#{me.queuePos}</b> — {t('queue_auto')}</div> : null}
+      {canQueue && me && <button className={me.queued ? 'btn-wood' : 'btn-green'} onClick={() => send({ t: 'queue', on: !me.queued })}>{me.queued ? t('leave_queue') : t('want_to_play')}</button>}
     </div>
   );
 }

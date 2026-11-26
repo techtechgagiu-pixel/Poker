@@ -65,10 +65,10 @@ function JoinGate({ code, info, onJoined }: { code: string; info: any; onJoined:
         <p>{t('host')}: <b>{info.host}</b> · {t('players')}: {info.players}/4</p>
         <label>{t('nickname')}<input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} autoFocus /></label>
         <div className="row-btns">
-          <button className="btn-green big" disabled={busy || !name.trim() || info.status !== 'LOBBY'} onClick={() => join(false)}>{t('join')}</button>
+          <button className="btn-green big" disabled={busy || !name.trim()} onClick={() => join(false)}>{t('join')}</button>
           {info.spectators && <button className="btn-wood" disabled={busy || !name.trim()} onClick={() => join(true)}>👁 {t('spectate')}</button>}
         </div>
-        {info.status !== 'LOBBY' && <p className="muted">{info.spectators ? 'Partida e în desfășurare — poți intra ca spectator.' : 'Partida e în desfășurare.'}</p>}
+        {info.status !== 'LOBBY' && <p className="muted">{info.botSeats > 0 ? t('join_replace_bot') : info.spectators ? t('join_queue').replace('{n}', String((info.queue ?? 0) + 1)) : t('room_full_msg')}</p>}
         <button className="link" onClick={() => navigate('/')}>← {t('back')}</button>
       </div>
     </div>
@@ -124,7 +124,8 @@ function Lobby() {
             })}
           </ul>
           <h3>{t('spectators')} ({room.members.filter((m) => m.role === 'spectator').length})</h3>
-          <p className="muted">{room.members.filter((m) => m.role === 'spectator').map((m) => m.name).join(', ') || '—'}</p>
+          <p className="muted">{room.members.filter((m) => m.role === 'spectator').map((m) => m.name + (m.queued ? ` (${t('in_queue')} #${m.queuePos})` : '')).join(', ') || '—'}</p>
+          {me?.role === 'spectator' && <button className="btn-wood" onClick={() => send({ t: 'queue', on: !me.queued })}>{me.queued ? t('leave_queue') : t('want_to_play')}</button>}
           <div className="lobby-actions">
             {you.role === 'player' && !you.isHost && <button className={me?.ready ? 'btn-wood' : 'btn-green big'} onClick={() => send({ t: 'ready', ready: !me?.ready })}>{me?.ready ? t('not_ready') : t('ready')}</button>}
             {you.isHost && <button className="btn-gold big" disabled={!allReady || !anyCategoryEnabled(room.config)} onClick={() => send({ t: 'start' })}>{t('start')}</button>}

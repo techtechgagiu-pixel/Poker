@@ -22,6 +22,8 @@ interface Member {
   mic: boolean; cam: boolean; chatTimes: number[]; recentAids: string[]; pauseRequests: number;
   /** the player asked the server to play their turns automatically */
   autoplay?: boolean;
+  /** spectator waiting for a free seat (takes it automatically) */
+  queued?: boolean; queuedAt?: number;
 }
 
 interface RoomData {
@@ -31,6 +33,8 @@ interface RoomData {
   status: RoomView['status'];
   game: GameState | null; matchConfig: RoomConfig | null; matchNo: number;
   gameSeatPids: (string | null)[]; gameBotLevels: (string | null)[];
+  /** game seat -> lobby seat index */
+  gameLobbySeat?: number[];
   chat: ChatMsg[]; chatSeq: number;
   racks: Record<string, (number | null)[]>;
   vote: VoteState | null; pausedUntil: number | null;
@@ -72,7 +76,12 @@ export class RemiRoom extends DurableObject<Env> {
       if (op === 'init') return Response.json(await this.init(body));
       const r = await this.load();
       if (!r) return Response.json({ error: 'room_not_found' }, { status: 404 });
-      if (op === 'info') return Response.json({ code: r.code, status: r.status, players: r.members.filter((m) => m.role === 'player').length, spectators: r.config.spectators, host: r.members.find((m) => m.pid === r.hostPid)?.name ?? '', mode: r.mode });
+      if (op === 'info') {
+        const botSeats = r.status === 'PLAYING' && r.game ? r.gameSeatPids.filter((p, k) => p === null && r.game!.seats[k].status === 'ACTIVE').length
+          : r.status === 'LOBBY' ? r.seats.filter((x) => x.kind !== 'human').length : 0;
+        return Response.json({ code: r.code, status: r.status, players: r.members.filter((m) => m.role === 'player').length, spectators: r.config.spectators,
+          host: r.members.find((m) => m.pid === r.hostPid)?.name ?? '', mode: r.mode, botSeats, queue: this.queue().length });
+      }
       if (op === 'join') return Response.json(await this.join(body));
       if (op === 'stats') return Response.json(this.stats());
       if (op === 'verify') { const th = await sha256(String(body.token ?? '')); const mm = r.members.find((x) => x.tokenHash === th); return Response.json({ ok: !!mm && mm.role === 'player' }); }
@@ -118,18 +127,63 @@ export class RemiRoom extends DurableObject<Env> {
     if (r.members.length >= MAX_MEMBERS) throw new GameError('room_full');
     const now = Date.now();
     const token = randomToken();
-    let role: Member['role'] = 'spectator';
     if (r.allowedKeys && !b.spectator && !r.allowedKeys.includes(b.playerKey)) throw new GameError('tournament_participants_only');
-    const free = r.seats.findIndex((s) => s.kind === 'empty');
-    if (!b.spectator && r.status === 'LOBBY' && free >= 0) role = 'player';
-    if (role === 'spectator' && !r.config.spectators) throw new GameError(r.status === 'LOBBY' ? 'room_full' : 'spectators_disabled');
-    const m = this.newMember(b.name, await sha256(token), b.playerKey ?? null, !!b.registered, role, now);
+    const m = this.newMember(b.name, await sha256(token), b.playerKey ?? null, !!b.registered, 'spectator', now);
     r.members.push(m);
-    if (role === 'player') r.seats[free] = { kind: 'human', pid: m.pid };
-    this.sys(`${m.name} a intrat${role === 'spectator' ? ' ca spectator' : ''}.`);
+    let seated = false;
+    if (!b.spectator) {
+      // the invitation link stays valid during the match: take a free/bot seat, otherwise wait in the queue
+      seated = this.seatMember(m, false);
+      if (!seated) {
+        if (!r.config.spectators || r.mode === 'training') { r.members.pop(); throw new GameError('room_full'); }
+        m.queued = true; m.queuedAt = now;
+      }
+    } else if (!r.config.spectators) { r.members.pop(); throw new GameError('spectators_disabled'); }
+    this.sys(seated ? `${m.name} a intrat la masă.` : m.queued ? `${m.name} așteaptă un loc liber (coadă #${this.queue().indexOf(m) + 1}).` : `${m.name} a intrat ca spectator.`);
     await this.persist();
     this.broadcast();
-    return { code: r.code, token, pid: m.pid, role };
+    await this.schedule();
+    return { code: r.code, token, pid: m.pid, role: m.role, queued: !!m.queued };
+  }
+
+  queue(): Member[] { return this.room!.members.filter((x) => x.queued).sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0)); }
+
+  /**
+   * Seat a member: in the lobby an empty seat (or replace a bot); during a match the seat of a bot
+   * (the newcomer continues with that seat's tiles and score). Returns false if nothing is free.
+   */
+  seatMember(m: Member, announce = true): boolean {
+    const r = this.room!;
+    if (r.mode === 'training') return false;
+    if (r.allowedKeys && !r.allowedKeys.includes(m.playerKey ?? '')) return false;
+    if (r.status === 'LOBBY') {
+      let i = r.seats.findIndex((s) => s.kind === 'empty');
+      if (i < 0) i = r.seats.findIndex((s) => s.kind === 'bot');
+      if (i < 0) return false;
+      r.seats[i] = { kind: 'human', pid: m.pid }; m.role = 'player'; m.ready = false; m.queued = false;
+      if (announce) this.sys(`${m.name} a primit un loc la masă.`);
+      return true;
+    }
+    const g = r.game;
+    if (r.status !== 'PLAYING' || !g) return false; // saved / finished: wait for the next lobby
+    const s = r.gameSeatPids.findIndex((p, k) => p === null && g.seats[k]?.status === 'ACTIVE');
+    if (s < 0) return false;
+    const old = g.seats[s].name;
+    r.gameSeatPids[s] = m.pid; r.gameBotLevels[s] = null;
+    g.seats[s].isBot = false; g.seats[s].name = m.name;
+    const li = r.gameLobbySeat?.[s] ?? s;
+    if (li < r.seats.length) r.seats[li] = { kind: 'human', pid: m.pid };
+    m.role = 'player'; m.queued = false; m.ready = true;
+    if (g.current === s) r.botAt = null;
+    g.version++;
+    this.sys(`${m.name} a preluat locul lui ${old}.`);
+    void announce;
+    return true;
+  }
+
+  /** Give freed seats to the spectators waiting in the queue (in arrival order). */
+  promoteQueue() {
+    for (const m of this.queue()) { if (!m.connected) continue; if (!this.seatMember(m)) break; }
   }
 
   stats() {
@@ -170,6 +224,7 @@ export class RemiRoom extends DurableObject<Env> {
     pair[1].serializeAttachment({ pid: m.pid });
     const wasDisconnected = !m.connected;
     m.connected = true; m.disconnectedAt = null;
+    if (m.queued) this.promoteQueue();
     if (wasDisconnected && r.status !== 'LOBBY') this.sys(`${m.name} s-a reconectat.`);
     await this.persist();
     this.sendState(pair[1], m);
@@ -250,6 +305,7 @@ export class RemiRoom extends DurableObject<Env> {
         r.seats = r.seats.map((s) => (s.kind === 'human' && s.pid === k.pid ? { kind: 'empty' } : s));
         for (const s of this.ctx.getWebSockets(k.pid)) { this.send(s, { t: 'kicked' }); s.close(4003, 'kicked'); }
         this.sys(`${k.name} a fost scos din cameră.`);
+        this.promoteQueue();
         return true;
       }
       case 'start': return this.startMatch(m, isHost);
@@ -299,6 +355,7 @@ export class RemiRoom extends DurableObject<Env> {
         for (const x of r.members) { x.ready = x.pid === r.hostPid; x.pauseRequests = 0; }
         // eliminated/spectating players keep their lobby seats
         this.sys('Revanșă! Confirmați că sunteți gata.');
+        this.promoteQueue();
         return true;
       }
       case 'restartTraining': {
@@ -316,6 +373,28 @@ export class RemiRoom extends DurableObject<Env> {
         if (seat < 0) throw new GameError('not_player');
         this.send(ws, { t: 'hints', hints: computeHints(buildView(r.game, r.matchConfig, seat), r.matchConfig) });
         return false;
+      }
+      case 'leaveSeat': {
+        // a player gives up their seat during the match: a bot continues it, the queue gets the chance
+        const g = r.game; const s = r.gameSeatPids.indexOf(m.pid);
+        if (r.status !== 'PLAYING' || !g || s < 0) throw new GameError('not_player');
+        const used = r.seats.filter((x) => x.kind === 'bot').map((x: any) => x.name);
+        const botName = BOT_NAMES.find((n) => !used.includes(n)) ?? 'Bot';
+        r.gameSeatPids[s] = null; r.gameBotLevels[s] = r.config.bots.difficulty;
+        g.seats[s].isBot = true; g.seats[s].name = botName;
+        const li = r.gameLobbySeat?.[s] ?? s;
+        if (li < r.seats.length) r.seats[li] = { kind: 'bot', level: r.config.bots.difficulty, name: botName };
+        m.role = 'spectator'; m.autoplay = false; r.botAt = null; g.version++;
+        this.sys(`${m.name} a părăsit locul; ${botName} preia.`);
+        if (r.hostPid === m.pid) { /* host keeps hosting as a spectator */ }
+        this.promoteQueue();
+        return true;
+      }
+      case 'queue': {
+        if (m.role !== 'spectator') return false;
+        if (msg.on) { m.queued = true; m.queuedAt = Date.now(); if (!this.seatMember(m)) this.sys(`${m.name} așteaptă un loc liber.`); }
+        else m.queued = false;
+        return true;
       }
       case 'autoplay': {
         if (r.status !== 'PLAYING' || r.gameSeatPids.indexOf(m.pid) < 0) throw new GameError('not_player');
@@ -349,6 +428,7 @@ export class RemiRoom extends DurableObject<Env> {
     if (msg.kind === 'leave') {
       if (s.kind !== 'human' || s.pid !== m.pid) throw new GameError('bad_seat');
       r.seats[i] = { kind: 'empty' }; m.role = 'spectator'; m.ready = false;
+      this.promoteQueue();
       return true;
     }
     if (!isHost) throw new GameError('host_only');
@@ -391,6 +471,7 @@ export class RemiRoom extends DurableObject<Env> {
     r.seats = seats;
     // immutable snapshot of the rules for this match
     r.matchConfig = structuredClone(r.config);
+    r.gameLobbySeat = seats.map((s, i) => (s.kind !== 'empty' ? i : -1)).filter((i) => i >= 0);
     r.gameSeatPids = filled.map((s) => (s.kind === 'human' ? s.pid : null));
     r.gameBotLevels = filled.map((s) => (s.kind === 'bot' ? s.level : null));
     const players = filled.map((s) => (s.kind === 'human' ? { name: this.member(s.pid)!.name, isBot: false } : { name: (s as any).name, isBot: true }));
@@ -664,7 +745,7 @@ export class RemiRoom extends DurableObject<Env> {
     const members: PublicMember[] = r.members.map((m) => {
       const gs = r.gameSeatPids.indexOf(m.pid);
       return { pid: m.pid, name: m.name, role: m.role, ready: m.ready, connected: m.connected, isHost: m.pid === r.hostPid, seat: seatOf(m.pid),
-        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered, autoplay: !!m.autoplay };
+        botControlled: gs >= 0 && !!r.game && r.status === 'PLAYING' && this.isBotControlled(gs, now), mic: m.mic, cam: m.cam, registered: m.registered, autoplay: !!m.autoplay, queued: !!m.queued, queuePos: m.queued ? this.queue().indexOf(m) + 1 : 0 };
     });
     return { code: r.code, status: r.status, hostPid: r.hostPid, config: r.status === 'LOBBY' ? r.config : r.matchConfig ?? r.config, locked: r.status !== 'LOBBY',
       seats: r.seats, members, chat: r.chat.slice(-40), vote: r.vote, pausedUntil: r.pausedUntil, nextReady: r.nextReady,

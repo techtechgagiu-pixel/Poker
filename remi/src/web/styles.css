@@ -490,3 +490,6 @@ body.tile-dragging .table-root .discard-stack.drop-hot { transform: scale(calc(v
 .table-root:not(.joker-hints) .jbadge { display: none; }
 .table-root:not(.joker-hints) .tile.real-joker { background: linear-gradient(180deg, var(--ivory), var(--ivory-2)); }
 .theme-arena.table-root:not(.joker-hints) .tile.real-joker { background: linear-gradient(180deg, #fffdf6, #f1e9d4); }
+
+.spectator-rack { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.queue-info { font-size: 18px; color: var(--gold); }

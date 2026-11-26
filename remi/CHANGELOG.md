@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0 — 2026-11-26
+- Linkul de invitație funcționează și după start: **înlocuiești un bot** (cu piesele și punctajul lui) sau intri ca **spectator la coadă**; locul eliberat („Părăsește locul”, revanșă) trece automat la primul din coadă.
+- Jokerul nu mai e afișat pe ecran (fără casetă, fără „J”; aranjarea automată îl tratează ca piesă normală) — indicii doar în antrenament.
+- Ferestrele (setări, chat, sortare, meniul mesei, istoric) se închid la atingere în afara lor.
+
 ## 1.3.0 — 2026-11-26
 - **AUTO**: butonul „▶ AUTO” lasă serverul să joace turele tale (bot nivel greu) până îl apeși din nou sau muți tu o piesă; ceilalți văd eticheta AUTO.
 - **Rama-scut** pentru avatar/cameră în toate temele (aurie; argintie pe Albastru de noapte); rândurile de piese cu spatele ale adversarilor înlocuite de insigna cu numărul de piese.

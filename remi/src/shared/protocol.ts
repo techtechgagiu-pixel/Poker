@@ -6,7 +6,7 @@ export type SeatSlot = { kind: 'human'; pid: string } | { kind: 'bot'; level: 'e
 
 export interface PublicMember {
   pid: string; name: string; role: 'player' | 'spectator'; ready: boolean; connected: boolean; isHost: boolean;
-  seat: number | null; botControlled: boolean; mic: boolean; cam: boolean; registered: boolean; autoplay: boolean;
+  seat: number | null; botControlled: boolean; mic: boolean; cam: boolean; registered: boolean; autoplay: boolean; queued: boolean; queuePos: number;
 }
 
 export interface ChatMsg { id: number; pid: string; name: string; text: string; ts: number; kind: 'text' | 'reaction' | 'system' }
@@ -61,6 +61,8 @@ export type ClientMsg =
   | { t: 'rtc'; to: string; data: unknown }
   | { t: 'media'; mic: boolean; cam: boolean }
   | { t: 'autoplay'; on: boolean }
+  | { t: 'leaveSeat' }
+  | { t: 'queue'; on: boolean }
   | { t: 'ping'; ts: number };
 
 export interface Hint { kind: string; tiles: number[]; text: string }
