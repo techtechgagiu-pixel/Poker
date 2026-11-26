@@ -113,6 +113,34 @@ async function playTurn(p) {
     }
     ok('players took real turns through the UI', turns >= 8, `${turns} turns`);
 
+    // drag & drop the eligible left discard onto a chosen rack slot
+    {
+      let dragged = false;
+      const tEnd2 = Date.now() + 60000;
+      while (!dragged && Date.now() < tEnd2) {
+        for (const P of all) {
+          const st = await state(P);
+          if (dragged || !st.game.me || !st.game.me.canTakeDiscard) { if (!dragged) await playTurn(P); continue; }
+          const top = st.game.discards[st.game.me.discardFrom].at(-1);
+          const src = await P.page.locator(`.discard-stack[data-seat="${st.game.me.discardFrom}"]`).boundingBox();
+          const free = await P.page.evaluate(() => { const l = window.__remiRack.getState().layout; return l.lastIndexOf(null); });
+          const rack = await P.page.locator('.rack').boundingBox();
+          // drop on the last slot of the second row
+          const tx = rack.x + rack.width - 40, ty = rack.y + rack.height - 40;
+          await P.page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
+          await P.page.mouse.down();
+          for (let i = 1; i <= 25; i++) await P.page.mouse.move(src.x + (tx - src.x) * i / 25, src.y + (ty - src.y) * i / 25);
+          await P.page.mouse.up();
+          const after = await waitFor(P, (s) => s.game.me.hand.includes(top), 8000, 'took discard by drag');
+          const slot = await P.page.evaluate((id) => window.__remiRack.getState().layout.indexOf(id), top);
+          ok('drag & drop from the left discard stack takes the tile into the dropped slot', after.game.phase === 'WAITING_FOR_DISCARD' && slot === free, `slot ${slot} (target ${free})`);
+          dragged = true;
+          await playTurn(P);
+        }
+      }
+      if (!dragged) ok('drag & drop from the left discard stack', false, 'no eligible discard occurred');
+    }
+
     // discard history bar
     await A.page.locator('.discard-stack').first().click();
     const hb = await A.page.locator('.history-bar').isVisible();

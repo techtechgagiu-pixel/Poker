@@ -13,6 +13,12 @@ export const TILE_DIM = { s: [54, 74], m: [62, 86], l: [70, 96] } as const;
 
 interface Props { joker: JokerInfo; scale: () => number; onDropDiscard: (tile: number) => void; focusIndex: number | null; heldIndex: number | null; hintTiles: Set<number> }
 
+/** Hit-testing for drags that start outside the rack (discard stack, draw pile). */
+export const rackHit: { slotAt: ((x: number, y: number) => number | null) | null; scale: () => number } = { slotAt: null, scale: () => 1 };
+
+let lastWrite = 0;
+let fpsCap60 = false;
+
 export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintTiles }: Props) {
   const layout = useRack((s) => s.layout);
   const settings = useStore((s) => s.settings);
@@ -39,6 +45,17 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     return rr * cols + c;
   };
 
+  rackHit.slotAt = slotAt; rackHit.scale = scale;
+  fpsCap60 = settings.fps === '60';
+  // tiles that just arrived (draw / take) get a short arrival animation
+  const known = useRef<Set<number>>(new Set());
+  const fresh = useMemo(() => {
+    const f = new Set<number>();
+    if (known.current.size) for (const id of layout) if (id !== null && !known.current.has(id)) f.add(id);
+    known.current = new Set(layout.filter((x): x is number => x !== null));
+    return f;
+  }, [layout]);
+  useEffect(() => () => { rackHit.slotAt = null; }, []);
   const onDown = (e: React.PointerEvent, id: number, from: number) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const el = e.currentTarget as HTMLElement;
@@ -49,8 +66,11 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     const d = drag.current; if (!d || d.pid !== e.pointerId) return;
     d.px = e.clientX; d.py = e.clientY;
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) { d.moved = true; d.el.classList.add('dragging'); }
-    if (d.moved && !d.raf) d.raf = requestAnimationFrame(() => {
-      d.raf = 0; const s = scale(); const p = pos(d.from);
+    if (d.moved && !d.raf) d.raf = requestAnimationFrame((ts) => {
+      d.raf = 0;
+      if (fpsCap60 && ts - lastWrite < 15) { d.raf = requestAnimationFrame(() => { d.raf = 0; onMove(e); }); return; }
+      lastWrite = ts;
+      const s = scale(); const p = pos(d.from);
       d.el.style.transform = `translate3d(${p.x + (d.px - d.sx) / s}px, ${p.y + (d.py - d.sy) / s - 6}px, 0) scale(1.06)`;
     });
   };
@@ -58,9 +78,9 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     const d = drag.current; if (!d || d.pid !== e.pointerId) return;
     drag.current = null;
     if (d.raf) cancelAnimationFrame(d.raf);
-    d.el.classList.remove('dragging');
     const st = useStore.getState();
     if (!d.moved) {
+      d.el.classList.remove('dragging');
       const sel = st.selected.includes(d.id) ? st.selected.filter((x) => x !== d.id) : e.shiftKey || e.ctrlKey || e.metaKey ? [...st.selected, d.id] : [d.id];
       st.set({ selected: sel }); sfx('move');
       return;
@@ -69,11 +89,19 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     d.el.style.visibility = 'hidden';
     const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-drop]');
     d.el.style.visibility = '';
-    // restore the React-managed transform; the layout change below then animates the tile into place
-    const home = pos(d.from); d.el.style.transform = `translate3d(${home.x}px, ${home.y}px, 0)`;
-    if (under?.getAttribute('data-drop') === 'discard') { onDropDiscard(d.id); return; }
+    const s = scale(); const home = pos(d.from);
+    const glideFrom = () => {
+      // freeze at the release point (no transition), then let the transition carry it to its slot
+      d.el.style.transform = `translate3d(${home.x + (e.clientX - d.sx) / s}px, ${home.y + (e.clientY - d.sy) / s - 6}px, 0)`;
+      void d.el.offsetWidth;
+      d.el.classList.remove('dragging');
+    };
+    const glideHome = () => { glideFrom(); d.el.style.transform = `translate3d(${home.x}px, ${home.y}px, 0)`; };
+    if (under?.getAttribute('data-drop') === 'discard') { glideHome(); onDropDiscard(d.id); return; }
     const to = slotAt(e.clientX, e.clientY);
-    if (to === null || to === d.from) return;
+    if (to === null || to === d.from) { glideHome(); return; }
+    glideFrom();
+    // React now writes the target transform: the tile glides from the finger to the slot (no snap back)
     moveTiles(d.id, to, st.selected.includes(d.id) ? st.selected : [d.id]);
     sfx('snap');
   };
@@ -89,7 +117,7 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
         {slots.map(({ id, i }) => id === null ? null : (
           <div key={id} className={`rack-tile ${heldIndex === i ? 'held' : ''}`} style={{ transform: `translate3d(${pos(i).x}px, ${pos(i).y}px, 0)` }}
             onPointerDown={(e) => onDown(e, id, i)}>
-            <Tile id={id} joker={joker} w={tw} h={th} selected={selected.includes(id)} hint={hintTiles.has(id)} />
+            <Tile id={id} joker={joker} w={tw} h={th} selected={selected.includes(id)} hint={hintTiles.has(id)} className={fresh.has(id) ? 'arrive' : ''} />
           </div>
         ))}
         <div className="rack-brand">Gagiu's WorkArt</div>

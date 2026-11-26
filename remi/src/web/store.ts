@@ -70,3 +70,4 @@ interface MediaState {
   set: (p: Partial<MediaState>) => void;
 }
 export const useMedia = create<MediaState>((set) => ({ micOn: false, camOn: false, local: null, peers: {}, localSpeaking: false, error: null, allVideoHidden: false, expanded: null, set: (p) => set(p) }));
+(window as any).__remiMedia = useMedia;

@@ -69,14 +69,16 @@ const sendRaw = (page, msg) => page.evaluate((m) => window.__remiSend(m), msg);
     await sleep(2000);
     const A2 = await A.ctx.newPage(); await A2.goto(`${BASE}/room/${r.code}`);
     const B2 = await B.ctx.newPage(); await B2.goto(`${BASE}/room/${r.code}`);
-    await waitFor(A2, (s) => s.room && s.room.status === 'SAVED', 15000, 'saved state');
+    const reA = await waitFor(A2, (s) => s.room && s.room.status === 'SAVED' && s.game, 15000, 'saved state');
+    const reB = await waitFor(B2, (s) => s.room && s.room.status === 'SAVED' && s.game, 15000, 'saved state B');
     await A2.getByRole('button', { name: 'Reia partida salvată' }).click();
     await B2.getByRole('button', { name: 'Reia partida salvată' }).click();
+    const same = JSON.stringify(reA.game.me.hand) === JSON.stringify(before.game.me.hand) && JSON.stringify(reB.game.me.hand) === JSON.stringify(beforeB.game.me.hand)
+      && reA.game.pile === before.game.pile && reA.game.indicator === before.game.indicator && reA.game.current === before.game.current && reA.game.phase === before.game.phase
+      && JSON.stringify(reA.game.discards) === JSON.stringify(before.game.discards) && JSON.stringify(reA.game.seats.map((s) => s.score)) === JSON.stringify(before.game.seats.map((s) => s.score));
+    ok('restored match is identical (hands, pile, discards, turn, indicator, scores, no reshuffle)', same);
     const after = await waitFor(A2, (s) => s.room.status === 'PLAYING' && !s.game.paused, 15000, 'resumed saved');
-    const afterB = await state(B2);
-    const same = JSON.stringify(after.game.me.hand) === JSON.stringify(before.game.me.hand) && JSON.stringify(afterB.game.me.hand) === JSON.stringify(beforeB.game.me.hand)
-      && after.game.pile === before.game.pile && after.game.indicator === before.game.indicator && JSON.stringify(after.game.seats.map((s) => s.score)) === JSON.stringify(before.game.seats.map((s) => s.score));
-    ok('restored match is identical (hands, pile, indicator, scores, no reshuffle)', same);
+    ok('resuming continues from the saved state version', after.game.round === before.game.round && after.game.version >= before.game.version);
 
     // ---- rematch: a training room with startingScore 1 ends after one close
     const R = await player(browser, 'Rematcher');

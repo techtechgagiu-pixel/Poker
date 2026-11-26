@@ -147,7 +147,7 @@ body.immersive .table-root { position: fixed; inset: 0; z-index: 50; }
     linear-gradient(180deg, var(--wood-3), var(--wood-1) 40%, var(--wood-2)); }
 .felt { position: absolute; left: 36px; right: 36px; border-radius: 22px; box-shadow: inset 0 0 0 6px rgba(0,0,0,.25), inset 0 10px 40px rgba(0,0,0,.55), 0 2px 0 rgba(255,255,255,.08);
   background: radial-gradient(ellipse at 50% 45%, var(--felt-1), var(--felt-2) 85%); }
-.q-ultra .felt::after, .q-auto .felt::after { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: .18; mix-blend-mode: overlay;
+.q-ultra .felt::after, .q-auto .felt::after { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: .07; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
 .felt-logo { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); font-family: 'Brush Script MT', 'Segoe Script', cursive; font-size: 64px; line-height: .9; text-align: center; color: rgba(0,0,0,.18); text-shadow: 0 1px 0 rgba(255,255,255,.06); pointer-events: none; }
 .toolbar { position: absolute; left: 0; right: 0; top: 0; height: 62px; display: flex; align-items: center; padding: 0 26px; gap: 18px; z-index: 5; }
@@ -247,8 +247,17 @@ body.immersive .table-root { position: fixed; inset: 0; z-index: 50; }
 .rack { position: relative; border-radius: 10px; background: repeating-linear-gradient(90deg, rgba(0,0,0,.12) 0 2px, transparent 2px 13px), linear-gradient(180deg, var(--wood-2), var(--wood-1)); box-shadow: inset 0 4px 12px rgba(0,0,0,.5); touch-action: none; }
 .rack-ledge { position: absolute; left: 6px; right: 6px; height: 12px; border-radius: 4px; background: linear-gradient(180deg, var(--wood-3), var(--wood-2)); box-shadow: 0 3px 4px rgba(0,0,0,.5); }
 .rack-brand { position: absolute; right: 14px; bottom: -13px; font-family: 'Brush Script MT', 'Segoe Script', cursive; color: rgba(226,184,102,.55); font-size: 16px; pointer-events: none; }
-.rack-tile { position: absolute; left: 0; top: 0; will-change: transform; transition: transform .16s cubic-bezier(.2,.8,.2,1); cursor: grab; z-index: 1; }
-.rack-tile.dragging { transition: none; z-index: 20; cursor: grabbing; filter: drop-shadow(0 12px 12px rgba(0,0,0,.5)); }
+.rack-tile { position: absolute; left: 0; top: 0; will-change: transform; transition: transform .2s cubic-bezier(.2,.9,.25,1); cursor: grab; z-index: 1; touch-action: none; }
+.rack-tile .tile { transition: transform .14s ease-out, box-shadow .14s ease-out; }
+.tile.arrive { animation: arrive .32s cubic-bezier(.2,.9,.3,1.2); }
+@keyframes arrive { from { transform: translateY(-46px) scale(.8); opacity: 0; } }
+.tile.land { animation: land .28s cubic-bezier(.2,.9,.3,1.1); }
+@keyframes land { from { transform: translate(-30px, -40px) scale(1.15) rotate(-6deg); opacity: .3; } }
+.q-performance .tile.arrive, .q-performance .tile.land { animation-duration: .15s; }
+.q-performance .wood-frame { background: linear-gradient(180deg, var(--wood-3), var(--wood-1) 40%, var(--wood-2)); }
+.q-performance .rack-tile .tile { transition: none; }
+.rack-tile.dragging { transition: none; z-index: 20; cursor: grabbing; }
+.rack-tile.dragging .tile { box-shadow: 0 14px 18px rgba(0,0,0,.45), 0 2px 0 #c9bb98; }
 .rack-tile.held .tile { box-shadow: 0 0 0 3px #8ec5ff, 0 10px 14px rgba(0,0,0,.45); transform: translateY(-8px); }
 .rack-focus { position: absolute; left: 0; top: 0; border-radius: 10px; border: 3px solid var(--gold); pointer-events: none; transition: transform .1s; z-index: 0; }
 .rm .rack-tile, .rm .rack-focus { transition: none; }
@@ -328,3 +337,9 @@ body.immersive .table-root { position: fixed; inset: 0; z-index: 50; }
 @media (pointer: coarse) { .tb-btn, .tb-pill { height: 54px; min-width: 54px; } }
 body.controller-mode [data-nav]:focus { outline: 4px solid var(--gold); }
 @media (prefers-reduced-motion: reduce) { .rack-tile { transition-duration: 60ms; } .pulse { animation: none; } }
+
+/* tile dragged from the table to the rack (lives on <body>, outside the scaled canvas) */
+.drag-ghost { position: fixed; left: 0; top: 0; transform-origin: 0 0; z-index: 400; pointer-events: none; will-change: transform; filter: drop-shadow(0 12px 14px rgba(0,0,0,.55)); }
+.drag-ghost .tile { width: 58px; height: 80px; }
+.discard-stack.eligible, .draw-pile.can { cursor: grab; touch-action: none; }
+.discard-stack .top-wrap { position: relative; z-index: 1; }

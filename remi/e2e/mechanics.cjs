@@ -55,6 +55,8 @@ async function training(browser, scenario, cfgPatch = {}) {
     // ---------- Arătare atu
     if (!ONLY) {
       const { ctx, page } = await training(browser, 'atu');
+      const st0 = await state(page);
+      ok('PASS button hidden unless holding both real jokers', (await page.locator('.btn-pass').count()) === (st0.game.me.canPass ? 1 : 0), `canPass=${st0.game.me.canPass}`);
       const btn = page.locator('.controls button', { hasText: 'ARATĂ ATU' });
       ok('ARATĂ ATU button shown when holding the twin of the indicator', await btn.isVisible());
       await btn.click();
@@ -75,7 +77,9 @@ async function training(browser, scenario, cfgPatch = {}) {
       if (sc === 'closeJoker') ok('close by discarding a real joker uses the joker penalty', r.jokerDiscard && r.penalty === { normalJoker: 20, normalPlain: 20, sequences: 20, triples: 20, doubles: 30, color: 30, grand: 60 }[r.category], `${r.category} ${r.penalty}`);
       else {
         const others = s.game.seats.filter((x) => x.seat !== r.winner).every((x) => x.score === 100 - r.penalty);
-        ok(`close ${sc}: category ${r.category}, penalty ${r.penalty}, opponents decreased`, r.category === cat && r.penalty === pen && others, `${r.category}/${r.penalty}`);
+        // if a real joker happened to be the 15th tile, the higher joker-discard penalty is the correct choice
+        const expected = r.jokerDiscard ? { color: 30, grand: 60, doubles: 30, sequences: 20, normalPlain: 20 }[cat] : pen;
+        ok(`close ${sc}: category ${r.category}, penalty ${r.penalty}, opponents decreased`, r.category === cat && r.penalty === expected && others, `${r.category}/${r.penalty}${r.jokerDiscard ? ' (joker discarded)' : ''}`);
       }
       if (sc === 'color') await page.screenshot({ path: `${OUT}/round-result-color.png` });
       await ctx.close();

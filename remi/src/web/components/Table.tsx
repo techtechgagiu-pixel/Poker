@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore, useMedia } from '../store';
-import { useRack, arrange } from '../rack';
+import { useRack, arrange, pendingDrop } from '../rack';
 import { useT } from '../i18n';
 import { act, send } from '../net';
 import { Tile, COLOR_SYMBOL } from './Tile';
-import { Rack, moveTiles } from './Rack';
+import { Rack, moveTiles, rackHit } from './Rack';
 import { isRealJoker, tileFace } from '../../engine/tiles';
 import { findClose } from '../../engine/bot';
 import { detectWins, chooseWin } from '../../engine/validator';
@@ -76,15 +76,56 @@ const TurnTimer = memo(function TurnTimer({ deadline, total, paused }: { deadlin
   return <div className="timer" ref={ref} aria-live="off" />;
 });
 
-function DiscardStack({ seat, v, x, y, mine, eligible, onOpen, open, name }: { seat: number; v: GameView; x: number; y: number; mine: boolean; eligible: boolean; onOpen: () => void; open: boolean; name: string }) {
+/**
+ * Drag a tile from the table (eligible left discard or the draw pile) onto the rack.
+ * A tap without movement keeps the normal click behaviour. The ghost follows the pointer in rAF.
+ */
+function useTableDrag(enabled: boolean, ghost: () => HTMLElement, onDrop: (slot: number | null) => void) {
+  const d = useRef<{ sx: number; sy: number; moved: boolean; el: HTMLElement | null; raf: number; x: number; y: number; id: number } | null>(null);
+  const suppressClick = useRef(false);
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (!enabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      d.current = { sx: e.clientX, sy: e.clientY, moved: false, el: null, raf: 0, x: e.clientX, y: e.clientY, id: e.pointerId };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const s = d.current; if (!s || s.id !== e.pointerId) return;
+      s.x = e.clientX; s.y = e.clientY;
+      if (!s.moved && Math.hypot(s.x - s.sx, s.y - s.sy) > 6) { s.moved = true; s.el = ghost(); document.body.appendChild(s.el); }
+      if (s.moved && !s.raf) s.raf = requestAnimationFrame(() => { s.raf = 0; if (s.el) { const k = rackHit.scale(); s.el.style.transform = `translate3d(${s.x - 30 * k}px, ${s.y - 42 * k}px, 0) scale(${(k * 1.08).toFixed(3)})`; } });
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      const s = d.current; if (!s || s.id !== e.pointerId) return;
+      d.current = null; if (s.raf) cancelAnimationFrame(s.raf);
+      s.el?.remove();
+      if (!s.moved) return;
+      suppressClick.current = true; setTimeout(() => (suppressClick.current = false), 0);
+      const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.rack-wrap');
+      onDrop(over ? rackHit.slotAt?.(e.clientX, e.clientY) ?? null : null);
+    },
+    onPointerCancel: () => { d.current?.el?.remove(); d.current = null; },
+    onClickCapture: (e: React.MouseEvent) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault(); } },
+  };
+}
+
+function ghostTile(html: string) {
+  const el = document.createElement('div');
+  el.className = 'drag-ghost'; el.innerHTML = html;
+  return el;
+}
+
+function DiscardStack({ seat, v, x, y, mine, eligible, onOpen, open, name, onTake }: { seat: number; v: GameView; x: number; y: number; mine: boolean; eligible: boolean; onOpen: () => void; open: boolean; name: string; onTake: (slot: number | null) => void }) {
+  const topRef = useRef<HTMLDivElement>(null);
+  const drag = useTableDrag(eligible, () => ghostTile(topRef.current?.innerHTML ?? ''), (slot) => { if (slot !== null) onTake(slot); });
   const pile = v.discards[seat] ?? [];
   const top = pile.at(-1);
   const layers = Math.min(3, Math.max(0, pile.length - 1));
   return (
     <button className={`discard-stack ${eligible ? 'eligible' : ''} ${open ? 'open' : ''} ${v.pass.active ? 'pass-locked' : ''}`} style={{ left: x, top: y }}
-      data-drop={mine ? 'discard' : undefined} onClick={onOpen} aria-label={`${name}: ${pile.length}`} data-nav="discard" data-seat={seat}>
+      data-drop={mine ? 'discard' : undefined} onClick={onOpen} aria-label={`${name}: ${pile.length}`} data-nav="discard" data-seat={seat} {...drag}>
       {Array.from({ length: layers }, (_, i) => <div key={i} className="layer" style={{ transform: `translate(${(i + 1) * 2}px, ${(i + 1) * -2}px)` }} />)}
-      {top !== undefined ? <Tile id={top} joker={v.joker} w={58} h={80} className="top" /> : <div className="empty-slot">{mine ? '⇣' : ''}</div>}
+      {top !== undefined ? <div ref={topRef} className="top-wrap"><Tile key={top} id={top} joker={v.joker} w={58} h={80} className="top land" /></div> : <div className="empty-slot">{mine ? '⇣' : ''}</div>}
       <span className="count">{pile.length}</span>
     </button>
   );
@@ -172,6 +213,7 @@ export function GameTable() {
   };
   const doDraw = () => { if (canDraw) act({ type: 'draw', source: 'pile' }); };
   const doTake = () => { if (canTake) act({ type: 'draw', source: 'discard' }); };
+  const pileDrag = useTableDrag(canDraw, () => ghostTile('<div class="tile back" style="width:58px;height:80px"></div>'), (slot) => { if (slot !== null && canDraw) { pendingDrop.slot = slot; pendingDrop.at = Date.now(); doDraw(); } });
   const doAtu = () => { if (me?.canAtu && !pending) act({ type: 'atu' }); };
   const sortBy = (mode: Parameters<typeof arrange>[3]) => {
     if (!me) return;
@@ -186,6 +228,21 @@ export function GameTable() {
   };
   useEffect(() => { const h = () => setFs(!!document.fullscreenElement || document.body.classList.contains('immersive')); document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h); }, []);
   useEffect(() => { (screen.orientation as any)?.lock?.('landscape').catch(() => null); }, []);
+  const [autoQ, setAutoQ] = useState<'balanced' | 'performance' | null>(null);
+  useEffect(() => {
+    if (settings.quality !== 'auto') return;
+    let raf = 0; let last = performance.now(); const f: number[] = [];
+    const loop = (t: number) => {
+      f.push(t - last); last = t;
+      if (f.length < 180) { raf = requestAnimationFrame(loop); return; }
+      f.sort((a, b) => a - b);
+      const p90 = f[Math.floor(f.length * 0.9)];
+      setAutoQ(p90 > 28 ? 'performance' : p90 > 20 ? 'balanced' : null);
+    };
+    const start = setTimeout(() => (raf = requestAnimationFrame(loop)), 1500);
+    return () => { clearTimeout(start); cancelAnimationFrame(raf); };
+  }, [settings.quality]);
+  const qualityClass = settings.quality === 'auto' ? (autoQ ? `q-${autoQ}` : 'q-auto') : `q-${settings.quality}`;
   // iOS Safari ignores touch-action for pinch: block zoom gestures on the table only
   useEffect(() => { const stop = (e: Event) => e.preventDefault(); document.addEventListener('gesturestart', stop); return () => document.removeEventListener('gesturestart', stop); }, []);
 
@@ -244,7 +301,7 @@ export function GameTable() {
   const currentName = v.seats[v.current]?.name;
 
   return (
-    <div className={`table-root theme-${settings.theme} q-${settings.quality} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
+    <div className={`table-root theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
       <div className="table-canvas" ref={canvas} style={{ width: Wc, height: H, transform: `translate(-50%, -50%) scale(${fit.s})` }}>
         <div className="wood-frame" />
         <div className="felt" style={{ top: feltTop, bottom: 255 }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
@@ -295,12 +352,13 @@ export function GameTable() {
           const [x, y] = discardSpot(sp, activeCount);
           const eligible = !!me && me.canTakeDiscard && me.discardFrom === seat;
           return <DiscardStack key={seat} seat={seat} v={v} x={x} y={y} mine={me?.seat === seat} eligible={eligible} name={v.seats[seat].name}
+            onTake={(slot) => { if (!canTake) return; pendingDrop.slot = slot; pendingDrop.at = Date.now(); doTake(); }}
             open={historySeat === seat} onOpen={() => set({ historySeat: historySeat === seat ? null : seat })} />;
         })}
 
         {/* centre: pile, indicator, joker, pass */}
         <div className="centre" style={{ left: cx, top: cy }}>
-          <button className={`draw-pile ${canDraw ? 'can' : ''}`} onClick={doDraw} disabled={!canDraw} aria-label={t('btn_draw')} data-nav="pile">
+          <button className={`draw-pile ${canDraw ? 'can' : ''}`} onClick={doDraw} disabled={!canDraw} aria-label={t('btn_draw')} data-nav="pile" {...pileDrag}>
             <div className="tile back" style={{ width: 62, height: 86 }} /><div className="tile back l2" style={{ width: 62, height: 86 }} />
             <span className="count">{v.pile}</span>
           </button>
@@ -353,7 +411,7 @@ export function GameTable() {
                 </button>
               </div>
               <div className="ctl-row">
-                {cfg.pass.enabled && <button className="btn-pass" disabled={!me.canPass || !!pending} onClick={doPass} data-nav="btn">♛ {t('btn_pass')}</button>}
+                {cfg.pass.enabled && me.canPass && <button className="btn-pass pulse" disabled={!!pending} onClick={doPass} data-nav="btn">♛ {t('btn_pass')}</button>}
                 {cfg.atu.enabled && me.canAtu && <button className="btn-gold pulse" onClick={doAtu} data-nav="btn">{t('btn_atu')}</button>}
                 <button className="btn-wood" onClick={() => setSortOpen((x) => !x)} data-nav="btn">{t('btn_sort')}</button>
               </div>

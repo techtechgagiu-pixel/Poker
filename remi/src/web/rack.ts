@@ -38,6 +38,9 @@ export function reshape(l: Layout, rows: 2 | 3): Layout {
 }
 
 /** Reconcile the layout with the authoritative hand: drop missing tiles, place new ones in free slots. */
+/** Slot where the next tile drawn by drag & drop should land (set before the draw action is sent). */
+export const pendingDrop: { slot: number | null; at: number } = { slot: null, at: 0 };
+
 export function reconcile(l: Layout, hand: number[], rows: 2 | 3): Layout {
   const size = rows * COLS[rows];
   let out = l.length === size ? l.slice() : reshape(l, rows);
@@ -49,6 +52,13 @@ export function reconcile(l: Layout, hand: number[], rows: 2 | 3): Layout {
     // new tiles go to the first free slot after the last tile of the first row that has space
     const lastUsed = out.reduce<number>((a, x, i) => (x !== null ? i : a), -1);
     for (const id of missing) {
+      if (pendingDrop.slot !== null && Date.now() - pendingDrop.at < 5000 && pendingDrop.slot < out.length) {
+        const want = pendingDrop.slot; pendingDrop.slot = null;
+        if (out[want] === null) { out[want] = id; continue; }
+        // occupied: shift the row segment right into the nearest free slot, keeping the drop position
+        const free = out.findIndex((x, k) => x === null && k > want);
+        if (free >= 0) { for (let k = free; k > want; k--) out[k] = out[k - 1]; out[want] = id; continue; }
+      }
       let i = out.findIndex((x, k) => x === null && k > lastUsed);
       if (i < 0) i = out.indexOf(null);
       out[i] = id;
@@ -135,3 +145,5 @@ function pack(groups: number[][], cols: number, size: number, gaps: boolean): La
 /** Persist per room+round so a refresh restores the arrangement. */
 export function saveLocal(k: string, l: Layout) { try { localStorage.setItem('remi.rack.' + k, JSON.stringify(l)); } catch { /* ignore */ } }
 export function loadLocal(k: string): Layout | null { try { return JSON.parse(localStorage.getItem('remi.rack.' + k) ?? 'null'); } catch { return null; } }
+
+(window as any).__remiRack = useRack;
