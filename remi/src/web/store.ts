@@ -12,7 +12,7 @@ export interface Settings {
   micId: string; camId: string; speakerId: string; nickname: string; confirmJoker: boolean;
 }
 export const defaultSettings: Settings = {
-  lang: 'ro', theme: 'arena', quality: 'auto', fps: 'auto', reducedMotion: false, highContrast: false, skipAnim: false,
+  lang: 'ro', theme: 'mahogany', quality: 'auto', fps: 'auto', reducedMotion: false, highContrast: false, skipAnim: false,
   rackRows: 2, tileSize: 'l', tileSpacing: 4, snapping: true,
   master: 0.8, music: 0, sfx: 0.8, voice: 1, notif: 0.7, mute: false, ambient: 'fire',
   diagnostics: false, pushToTalk: false, videoQuality: 'balanced', mirror: true, micId: '', camId: '', speakerId: '', nickname: '', confirmJoker: true,
@@ -21,7 +21,7 @@ function loadSettings(): Settings {
   try {
     const s = { ...defaultSettings, ...JSON.parse(localStorage.getItem('remi.settings') ?? '{}') };
     if (!localStorage.getItem('remi.tilesV2')) { s.tileSize = 'l'; localStorage.setItem('remi.tilesV2', '1'); }
-    if (!localStorage.getItem('remi.themeV2')) { s.theme = 'arena'; localStorage.setItem('remi.themeV2', '1'); }
+    if (!localStorage.getItem('remi.themeV3')) { s.theme = 'mahogany'; localStorage.setItem('remi.themeV3', '1'); }
     if (!localStorage.getItem('remi.settings') && navigator.language && !navigator.language.startsWith('ro')) s.lang = defaultSettings.lang; // Romanian is the default
     return s;
   } catch { return { ...defaultSettings }; }
