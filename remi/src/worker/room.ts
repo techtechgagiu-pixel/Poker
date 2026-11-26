@@ -170,7 +170,7 @@ export class RemiRoom extends DurableObject<Env> {
     const pid = this.pidOf(ws);
     const m = r.members.find((x) => x.pid === pid);
     if (!m) { ws.close(4003, 'kicked'); return; }
-    if (typeof raw !== 'string' || raw.length > 8192) return;
+    if (typeof raw !== 'string' || raw.length > 65536) return;
     let msg: ClientMsg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg.t === 'ping') { this.send(ws, { t: 'pong', ts: msg.ts, server: Date.now() }); return; }
@@ -499,7 +499,7 @@ export class RemiRoom extends DurableObject<Env> {
     const target = this.member(to);
     if (!target || m.role !== 'player' || target.role !== 'player') return;
     if (!r.config.voice && !r.config.video) return;
-    const s = JSON.stringify(data ?? null); if (s.length > 16000) return;
+    const s = JSON.stringify(data ?? null); if (s.length > 32000) return;
     this.sendTo(to, { t: 'rtc', from: m.pid, data });
   }
 

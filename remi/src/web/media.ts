@@ -20,8 +20,9 @@ function patchPeer(pid: string, p: Partial<MediaPeer>) {
   useMedia.setState({ peers: { ...peers, [pid]: { ...cur, ...p } } });
 }
 
-async function ensureActive() {
-  if (active) return;
+let activating: Promise<void> | null = null;
+function ensureActive(): Promise<void> { return (activating ??= doActivate()); }
+async function doActivate() {
   active = true;
   const room = useStore.getState().room!;
   try {
@@ -29,7 +30,6 @@ async function ensureActive() {
     const r = await fetch(`/api/rooms/${room.code}/ice`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: tok?.token }) });
     if (r.ok) iceServers = ((await r.json()) as any).iceServers;
   } catch { /* STUN fallback */ }
-  unsub = onRtc(onSignal) as any;
   speakTimer = window.setInterval(detectSpeakers, 120);
   syncPeers();
 }
@@ -68,8 +68,19 @@ function createPc(pid: string) {
   patchPeer(pid, { state: 'connecting' });
 }
 
+/** Signalling is always listened to and processed strictly in order, per peer. */
+const sigQueue = new Map<string, Promise<void>>();
+unsub = onRtc((from, data) => {
+  const prev = sigQueue.get(from) ?? Promise.resolve();
+  const next = prev.then(() => onSignal(from, data)).catch(() => undefined);
+  sigQueue.set(from, next);
+}) as any;
+const offerSince = new Map<string, number>();
+
 async function onSignal(from: string, data: any) {
-  if (!active) await ensureActive();
+  const room = useStore.getState().room;
+  if (!room || (!room.config.voice && !room.config.video) || useStore.getState().you?.role !== 'player') return;
+  await ensureActive();
   let entry = pcs.get(from);
   if (!entry) { createPc(from); entry = pcs.get(from)!; }
   const { pc } = entry;
@@ -98,12 +109,40 @@ function attachAnalyser(pid: string, stream: MediaStream) {
 let localAnalyser: AnalyserNode | null = null;
 const buf = new Uint8Array(512);
 function level(an: AnalyserNode) { an.getByteTimeDomainData(buf); let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i] - 128)); return m / 128; }
+function remoteLevel(e: { pc: RTCPeerConnection; analyser?: AnalyserNode }): number {
+  // WebRTC's own per-receiver audio level (reliable for remote streams, no WebAudio needed)
+  let lv = 0;
+  for (const r of e.pc.getReceivers()) if (r.track?.kind === 'audio') for (const s of r.getSynchronizationSources?.() ?? []) if (performance.timeOrigin + performance.now() - s.timestamp < 1000 || true) lv = Math.max(lv, s.audioLevel ?? 0);
+  if (!lv && e.analyser) lv = level(e.analyser);
+  return lv;
+}
+/** Renegotiate if a local track was added during another negotiation and never made it into the session. */
+let lastHeal = 0;
+function healNegotiation() {
+  const now = performance.now(); if (now - lastHeal < 1500) return; lastHeal = now;
+  for (const [pid, e] of pcs) {
+    const pc = e.pc;
+    if (pc.signalingState === 'have-local-offer') {
+      // an offer nobody answered (e.g. lost during a reconnect): roll back and offer again
+      const since = offerSince.get(pid) ?? now; offerSince.set(pid, since);
+      if (now - since > 5000) { offerSince.delete(pid); pc.setLocalDescription({ type: 'rollback' }).then(() => { lastHeal = 0; }).catch(() => null); }
+      continue;
+    }
+    offerSince.delete(pid);
+    if (pc.signalingState !== 'stable' || e.makingOffer) continue;
+    const stale = pc.getTransceivers().some((t) => t.sender.track && !(t.currentDirection ?? '').includes('send'));
+    if (!stale) continue;
+    (async () => { try { e.makingOffer = true; await pc.setLocalDescription(); send({ t: 'rtc', to: pid, data: { description: pc.localDescription } }); } catch { /* retry next tick */ } finally { e.makingOffer = false; } })();
+  }
+}
 function detectSpeakers() {
+  healNegotiation();
   const peers = useMedia.getState().peers;
   let changed = false; const next = { ...peers };
+  if (audioCtx?.state === 'suspended') audioCtx.resume().catch(() => null);
   for (const [pid, e] of pcs) {
-    if (!e.analyser || !next[pid]) continue;
-    const sp = level(e.analyser) > 0.06;
+    if (!next[pid]) continue;
+    const sp = !next[pid].muted && remoteLevel(e) > 0.03;
     if (sp !== next[pid].speaking) { next[pid] = { ...next[pid], speaking: sp }; changed = true; }
   }
   if (changed) useMedia.setState({ peers: next });
@@ -112,6 +151,7 @@ function detectSpeakers() {
 
 const VIDEO: Record<string, { h: number; fps: number; br: number }> = { low: { h: 180, fps: 15, br: 150_000 }, balanced: { h: 360, fps: 24, br: 450_000 }, high: { h: 720, fps: 30, br: 1_200_000 } };
 
+const want = { mic: false, cam: false };
 async function setLocal(mic: boolean, cam: boolean) {
   const s = useStore.getState().settings;
   const m = useMedia.getState();
@@ -129,6 +169,7 @@ async function setLocal(mic: boolean, cam: boolean) {
     }
   } catch (e: any) {
     useMedia.setState({ error: e?.name === 'NotAllowedError' ? 'permission_denied' : String(e?.message ?? e) });
+    want.mic = m.micOn; want.cam = m.camOn; // roll back only the request that failed
     useStore.getState().toast(e?.name === 'NotAllowedError' ? 'Permisiune refuzată pentru microfon/cameră.' : 'Dispozitiv media indisponibil.', 'error');
     return;
   }
@@ -159,8 +200,14 @@ async function setLocal(mic: boolean, cam: boolean) {
   }
 }
 
-export async function toggleMic() { const m = useMedia.getState(); await setLocal(!m.micOn, m.camOn); }
-export async function toggleCam() { const m = useMedia.getState(); await setLocal(m.micOn, !m.camOn); }
+/** Media changes are queued: rapid taps on mic then camera can never read stale state. */
+let chain: Promise<void> = Promise.resolve();
+function apply() {
+  chain = chain.then(() => setLocal(want.mic, want.cam)).catch(() => undefined);
+  return chain;
+}
+export function toggleMic() { want.mic = !want.mic; return apply(); }
+export function toggleCam() { want.cam = !want.cam; return apply(); }
 export function muteAll(muted: boolean) { const peers = useMedia.getState().peers; const n: typeof peers = {}; for (const [k, p] of Object.entries(peers)) n[k] = { ...p, muted }; useMedia.setState({ peers: n }); }
 
 // push-to-talk: hold Space
@@ -171,8 +218,10 @@ function closePc(pid: string) { const e = pcs.get(pid); if (e) { e.pc.close(); p
 
 /** Stop all tracks and connections (leaving the room). */
 export function stopMedia() {
+  want.mic = false; want.cam = false;
   for (const pid of [...pcs.keys()]) closePc(pid);
   useMedia.getState().local?.getTracks().forEach((t) => t.stop());
   useMedia.setState({ local: null, micOn: false, camOn: false, peers: {}, localSpeaking: false });
-  clearInterval(speakTimer); unsub?.(); unsub = null; active = false; localAnalyser = null;
+  clearInterval(speakTimer); active = false; activating = null; localAnalyser = null; sigQueue.clear();
 }
+(window as any).__remiPcs = pcs;

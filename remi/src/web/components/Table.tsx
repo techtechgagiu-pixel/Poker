@@ -243,6 +243,8 @@ export function GameTable() {
     return () => { clearTimeout(start); cancelAnimationFrame(raf); };
   }, [settings.quality]);
   const qualityClass = settings.quality === 'auto' ? (autoQ ? `q-${autoQ}` : 'q-auto') : `q-${settings.quality}`;
+  // voice/video signalling must be listened to even before this player turns on a mic/camera
+  useEffect(() => { if (you.role === 'player' && (cfg.voice || cfg.video)) import('../media'); }, [you.role, cfg.voice, cfg.video]);
   // iOS Safari ignores touch-action for pinch: block zoom gestures on the table only
   useEffect(() => { const stop = (e: Event) => e.preventDefault(); document.addEventListener('gesturestart', stop); return () => document.removeEventListener('gesturestart', stop); }, []);
 
