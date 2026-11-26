@@ -5,9 +5,10 @@ export const COLOR_CLASS = ['c-red', 'c-blue', 'c-yellow', 'c-black'];
 /** Shape symbols so colour is never the only cue (colour-blind friendly). */
 export const COLOR_SYMBOL = ['●', '■', '▲', '◆'];
 
-interface Props { id: number; joker?: JokerInfo | null; w: number; h: number; faceDown?: boolean; selected?: boolean; hint?: boolean; className?: string; style?: React.CSSProperties; title?: string }
+interface Props { id: number; joker?: JokerInfo | null; w: number; h: number; faceDown?: boolean; flipped?: boolean; selected?: boolean; hint?: boolean; className?: string; style?: React.CSSProperties; title?: string }
 
-export const Tile = memo(function Tile({ id, joker, w, h, faceDown, selected, hint, className = '', style, title }: Props) {
+export const Tile = memo(function Tile({ id, joker, w, h, faceDown, flipped, selected, hint, className = '', style, title }: Props) {
+  if (flipped) return <div className={`tile flipped ${selected ? 'sel' : ''} ${className}`} style={{ width: w, height: h, ...style }} data-tile={id} title={title} />;
   if (faceDown) return <div className={`tile back ${className}`} style={{ width: w, height: h, ...style }} />;
   const f = tileFace(id);
   const real = joker ? isRealJoker(id, joker) : false;

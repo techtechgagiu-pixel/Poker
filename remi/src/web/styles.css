@@ -512,3 +512,36 @@ body.tile-dragging .table-root .discard-stack.drop-hot { transform: scale(calc(v
 .people-pop li { list-style: none; display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
 .people-pop ul { margin: 0; padding: 0; }
 .tb-pill.btn { cursor: pointer; }
+
+/* ---------- flaming frame: the player whose PASS is active ---------- */
+.avatar-wrap { position: relative; display: block; }
+.avatar-wrap.flaming { filter: drop-shadow(0 0 7px #ff8a00) drop-shadow(0 0 16px rgba(255,90,0,.75)); animation: flameGlow .45s ease-in-out infinite alternate; z-index: 2; }
+@keyframes flameGlow { from { filter: drop-shadow(0 0 6px #ff8a00) drop-shadow(0 0 12px rgba(255,90,0,.6)); } to { filter: drop-shadow(0 0 11px #ffc400) drop-shadow(0 0 24px rgba(255,70,0,.85)); } }
+.flames { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.flames i { position: absolute; left: var(--l); top: var(--t); width: 24%; height: 34%; margin: -26% 0 0 -12%; transform-origin: 50% 100%; transform: rotate(var(--a)) scaleY(1);
+  border-radius: 50% 50% 50% 50% / 78% 78% 22% 22%;
+  background: radial-gradient(ellipse at 50% 88%, #fffbd0 0 14%, #ffd83a 34%, #ff9100 58%, #ff3d00 80%, rgba(255,61,0,0) 84%);
+  mix-blend-mode: screen; opacity: .95; animation: flameDance .62s ease-in-out infinite alternate; }
+.flames i:nth-child(2n) { animation-duration: .5s; } .flames i:nth-child(3n) { animation-duration: .74s; width: 28%; }
+@keyframes flameDance {
+  0% { transform: rotate(calc(var(--a) - 6deg)) scale(.9, .78); opacity: .8; }
+  50% { transform: rotate(calc(var(--a) + 5deg)) scale(1.05, 1.18); opacity: 1; }
+  100% { transform: rotate(calc(var(--a) - 3deg)) scale(.95, 1.4); opacity: .85; }
+}
+.rm .flames i, .q-performance .flames i { animation: none; }
+.q-performance .avatar-wrap.flaming { animation: none; }
+
+/* ---------- tile turned face-down (white back), local only ---------- */
+.tile.flipped { background: linear-gradient(145deg, #ffffff, #f3efe4 55%, #e6dfcc); box-shadow: 0 2px 0 #d9d0b8, 0 5px 8px rgba(0,0,0,.3); }
+.tile.flipped::after { content: ''; position: absolute; inset: 9%; border-radius: 5px; border: 1.5px solid rgba(120,100,60,.18); }
+.tile.flipped.sel { box-shadow: 0 0 0 3px var(--gold), 0 10px 14px rgba(0,0,0,.45); }
+
+/* ---------- turn timer: only counts for the player whose turn it is ---------- */
+.timer.idle { opacity: .35; background: conic-gradient(rgba(255,255,255,.12) 360deg, rgba(0,0,0,.5) 0); animation: none; }
+.timer.mini { width: 40px; height: 40px; font-size: 16px; }
+.timer.mini::before { inset: 4px; }
+.seat-timer { position: absolute; right: -10px; top: 56px; z-index: 6; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+
+/* controls: never overflow the column — extra buttons wrap onto a new line, two per row */
+.controls .ctl-row { flex-wrap: wrap; }
+.controls .ctl-row > button, .controls .ctl-row > .btn-auto { flex: 1 1 calc(50% - 4px); min-width: 0; }

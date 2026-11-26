@@ -55,7 +55,7 @@ function useFit(ref: React.RefObject<HTMLDivElement>) {
   return { ...dims, get: () => s.current };
 }
 
-const TurnTimer = memo(function TurnTimer({ deadline, total, paused }: { deadline: number | null; total: number; paused: boolean }) {
+const TurnTimer = memo(function TurnTimer({ deadline, total, paused, idle, mini }: { deadline: number | null; total: number; paused: boolean; idle?: boolean; mini?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const off = useStore((s) => s.net.serverOffset);
   useEffect(() => {
@@ -65,17 +65,17 @@ const TurnTimer = memo(function TurnTimer({ deadline, total, paused }: { deadlin
         const left = deadline ? Math.max(0, Math.ceil((deadline - (Date.now() + off)) / 1000)) : null;
         if (left !== last) {
           last = left ?? -2;
-          ref.current.textContent = paused ? '⏸' : left === null ? '∞' : String(left);
-          ref.current.classList.toggle('low', left !== null && left <= 5);
-          ref.current.style.setProperty('--p', left === null || !total ? '1' : String(left / total));
+          ref.current.textContent = idle ? '·' : paused ? '⏸' : left === null ? '∞' : String(left);
+          ref.current.classList.toggle('low', !idle && left !== null && left <= 5);
+          ref.current.style.setProperty('--p', idle ? '0' : left === null || !total ? '1' : String(left / total));
         }
       }
       raf = window.setTimeout(tick, 200) as any;
     };
     tick();
     return () => clearTimeout(raf);
-  }, [deadline, total, paused, off]);
-  return <div className="timer" ref={ref} aria-live="off" />;
+  }, [deadline, total, paused, off, idle]);
+  return <div className={`timer ${idle ? 'idle' : ''} ${mini ? 'mini' : ''}`} ref={ref} aria-live="off" />;
 });
 
 /**
@@ -362,7 +362,7 @@ export function GameTable() {
           return (
             <div key={s.seat}>
               <div className={`seat-badge spot-${sp} ${v.current === s.seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`} style={{ left: ax, top: ay }}>
-                <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
+                <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} flaming={v.pass.active && v.pass.by === s.seat} />
                 <span className="star-badge" title="Runde câștigate">{s.stats.roundsWon}</span>
                 <span className="tiles-badge" title="Piese">{s.tiles}</span>
                 <div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div>
@@ -371,6 +371,7 @@ export function GameTable() {
                 {member?.autoplay && s.status === 'ACTIVE' && <div className="sb-tag auto">AUTO</div>}
                 {member?.away && s.status === 'ACTIVE' && <div className="sb-tag auto">🤖 {t('robot_plays')}</div>}
                 <DeclineBubble pid={member?.pid ?? null} />
+                {v.current === s.seat && v.phase.startsWith('WAITING') && v.turnDeadline && s.status === 'ACTIVE' && <div className="seat-timer"><TurnTimer deadline={v.turnDeadline} total={cfg.turnSeconds} paused={v.paused} mini /></div>}
                 {member && !member.connected && s.status === 'ACTIVE' && <div className="sb-tag warn">{member.botControlled ? t('bot_controlled') : t('disconnected')}</div>}
                 {v.atuDeclaredBy.includes(s.seat) && <div className="sb-tag gold">ATU</div>}
               </div>
@@ -423,7 +424,7 @@ export function GameTable() {
         <div className="me-area" style={{ top: H - meH, width: Wc, height: meH }}>
           <div className="me-left">
             <MyBadge v={v} seat={perspective} />
-            <TurnTimer deadline={v.turnDeadline} total={cfg.turnSeconds} paused={v.paused} />
+            <TurnTimer deadline={myTurn ? v.turnDeadline : null} total={cfg.turnSeconds} paused={v.paused} idle={!myTurn} />
             {me && <TableMenu v={v} cfg={cfg} />}
           </div>
           {me ? (
@@ -566,7 +567,7 @@ function MyBadge({ v, seat }: { v: GameView; seat: number }) {
   const member = room.members.find((m) => m.pid === room.gameSeatPids[seat]);
   return (
     <div className={`my-badge ${v.current === seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`}>
-      <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
+      <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} flaming={v.pass.active && v.pass.by === seat} />
       <DeclineBubble pid={member?.pid ?? null} />
       <div><div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div><div className="sb-score">{s.score}</div>
         {v.atuDeclaredBy.includes(seat) && <div className="sb-tag gold">ATU</div>}{member?.autoplay && <div className="sb-tag auto">AUTO</div>}{s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}</div>

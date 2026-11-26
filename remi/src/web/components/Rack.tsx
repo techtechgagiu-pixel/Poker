@@ -28,12 +28,14 @@ interface Props { joker: JokerInfo; scale: () => number; onDropDiscard: (tile: n
 export const rackHit: { slotAt: ((x: number, y: number) => number | null) | null; scale: () => number } = { slotAt: null, scale: () => 1 };
 
 let lastWrite = 0;
+let lastTap: { id: number; t: number } | null = null;
 let fpsCap60 = false;
 
 export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintTiles }: Props) {
   const layout = useRack((s) => s.layout);
   const settings = useStore((s) => s.settings);
   const selected = useStore((s) => s.selected);
+  const flipped = useRack((s) => s.flipped);
   const rows = settings.rackRows; const cols = colsFor(rows, settings.tableZoom);
   const { tw, th } = tileDims(settings);
   const gap = settings.tileSpacing;
@@ -108,6 +110,14 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
     const st = useStore.getState();
     if (!d.moved) {
       d.el.classList.remove('dragging');
+      // double tap / double click = turn the tile face-down (white back) and back
+      const now = performance.now();
+      if (lastTap && lastTap.id === d.id && now - lastTap.t < 380) {
+        lastTap = null; useRack.getState().toggleFlip(d.id);
+        st.set({ selected: st.selected.filter((x) => x !== d.id) }); sfx('snap');
+        return;
+      }
+      lastTap = { id: d.id, t: now };
       const sel = st.selected.includes(d.id) ? st.selected.filter((x) => x !== d.id) : e.shiftKey || e.ctrlKey || e.metaKey ? [...st.selected, d.id] : [d.id];
       st.set({ selected: sel }); sfx('move');
       return;
@@ -173,7 +183,7 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
         {slots.map(({ id, i }) => id === null ? null : (
           <div key={id} className={`rack-tile ${heldIndex === i ? 'held' : ''}`} style={{ transform: `translate3d(${pos(i).x}px, ${pos(i).y}px, 0)` }}
             onPointerDown={(e) => onDown(e, id, i)}>
-            <Tile id={id} joker={joker} w={tw} h={th} selected={selected.includes(id)} hint={hintTiles.has(id)} className={fresh.has(id) ? 'arrive' : ''} />
+            <Tile id={id} joker={joker} w={tw} h={th} flipped={flipped.includes(id)} selected={selected.includes(id)} hint={hintTiles.has(id)} className={fresh.has(id) ? 'arrive' : ''} />
           </div>
         ))}
         <div className="rack-brand">Gagiu's WorkArt</div>

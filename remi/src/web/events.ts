@@ -23,7 +23,7 @@ export function onGameView(prev: GameView | null, v: GameView | null, serverRack
     const rack = useRack.getState();
     if (rack.key !== k) {
       const saved = loadLocal(k) ?? serverRack;
-      useRack.setState({ key: k, layout: reconcile(saved ?? initialLayout(v.me.hand, rows, v.joker), v.me.hand, rows), undo: [], redo: [] });
+      useRack.setState({ key: k, layout: reconcile(saved ?? initialLayout(v.me.hand, rows, v.joker), v.me.hand, rows), undo: [], redo: [], flipped: [] });
     } else {
       const next = reconcile(rack.layout, v.me.hand, rows);
       if (next.some((x, i) => x !== rack.layout[i])) useRack.setState({ layout: next });

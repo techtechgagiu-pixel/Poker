@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0 — 2026-11-26
+- **Ramă de foc** pe scutul jucătorului care are PASS activ.
+- **Dublu-atingere pe o piesă** o întoarce cu spatele alb (doar pe ecranul tău); încă o dublă-atingere o întoarce înapoi.
+- **Cronometru**: merge doar pentru cel care e la rând; al tău apare stins când joacă altcineva, iar cel la rând are un ceas mic lângă scut.
+- Butoanele de sub suport nu mai ies din coloană (AUTO nu mai e tăiat).
+
 ## 1.5.0 — 2026-11-26
 - Robot imediat când un jucător iese din masă sau din aplicație (fundal); reîncărcarea nu îți ia locul; reconectare implicit 8 s.
 - Camere/voce 4 jucători: roluri fixe în fiecare pereche (offerer/answerer) și linii media fixe — repară lipsa imaginii la unii jucători; TURN Cloudflare pentru rețele diferite.

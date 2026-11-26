@@ -16,11 +16,14 @@ export type Layout = (number | null)[];
 interface RackState {
   key: string; // room:round
   layout: Layout; undo: Layout[]; redo: Layout[];
+  /** tiles turned face-down (white back) on MY screen only — purely visual */
+  flipped: number[]; toggleFlip: (id: number) => void;
   set: (l: Layout, record?: boolean) => void;
   doUndo: () => void; doRedo: () => void;
 }
 export const useRack = create<RackState>((set, get) => ({
-  key: '', layout: [], undo: [], redo: [],
+  key: '', layout: [], undo: [], redo: [], flipped: [],
+  toggleFlip: (id) => set((s) => ({ flipped: s.flipped.includes(id) ? s.flipped.filter((x) => x !== id) : [...s.flipped, id] })),
   set: (l, record = true) => {
     const cur = get().layout;
     set({ layout: l, undo: record ? [...get().undo.slice(-40), cur] : get().undo, redo: record ? [] : get().redo });
