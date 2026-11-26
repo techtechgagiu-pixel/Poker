@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '../store';
 import { useRack, COLS, Layout } from '../rack';
+import { insertTiles, insertionIndex } from '../rackOps';
 import { Tile } from './Tile';
 import { sfx } from '../sound';
 import type { JokerInfo } from '../../engine/tiles';
@@ -125,11 +126,14 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
       setTimeout(() => { if (el.isConnected && useRack.getState().layout.includes(id)) el.style.transform = `translate3d(${home.x}px, ${home.y}px, 0)`; }, 1500);
       return;
     }
-    const to = slotAt(e.clientX, e.clientY);
-    if (to === null || to === d.from) { glideHome(); return; }
+    if (slotAt(e.clientX, e.clientY) === null) { glideHome(); return; }
+    const r0 = ref.current!.getBoundingClientRect();
+    const to = insertionIndex((e.clientX - r0.left) / s - pad, (e.clientY - r0.top) / s - pad, tw, th, gap, 10, cols, rows, useRack.getState().layout);
+    const group = st.selected.includes(d.id) ? st.selected : [d.id];
+    if (group.length === 1 && to === d.from) { glideHome(); return; }
     glideFrom();
     // React now writes the target transform: the tile glides from the finger to the slot (no snap back)
-    moveTiles(d.id, to, st.selected.includes(d.id) ? st.selected : [d.id]);
+    insertGroup(d.id, to, group, cols);
     sfx('snap');
   };
 
@@ -170,6 +174,15 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
 }
 
 /** Move one or several tiles so the dragged one lands on `to`; displaced tiles swap into vacated slots. */
+/** Insert the dragged tile(s) at `to`, sliding neighbours aside (keeps runs together). */
+export function insertGroup(dragged: number, to: number, group: number[], cols: number) {
+  const st = useRack.getState();
+  const l = st.layout;
+  const ordered = group.length > 1 ? l.filter((x): x is number => x !== null && group.includes(x)) : [dragged];
+  // "insert before the tile at `to`": lifting the dragged tile leaves a gap but never shifts others
+  st.set(insertTiles(l, cols, ordered, to));
+}
+
 export function moveTiles(dragged: number, to: number, group: number[]) {
   const st = useRack.getState();
   const l: Layout = st.layout.slice();
