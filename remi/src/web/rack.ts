@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { tileFace, effective, isRealJoker, JokerInfo } from '../engine/tiles';
 
-export const COLS: Record<2 | 3, number> = { 2: 16, 3: 12 };
+export const COLS: Record<2 | 3, number> = { 2: 14, 3: 12 };
 export type Layout = (number | null)[];
 
 interface RackState {
@@ -68,7 +68,7 @@ export function reconcile(l: Layout, hand: number[], rows: 2 | 3): Layout {
 }
 
 export function initialLayout(hand: number[], rows: 2 | 3, j: JokerInfo): Layout {
-  return arrange(hand, rows, j, 'color');
+  return arrange(hand, rows, j, 'auto');
 }
 
 type Mode = 'number' | 'color' | 'runs' | 'sets' | 'pairs' | 'auto';
@@ -119,7 +119,7 @@ export function arrange(hand: number[], rows: 2 | 3, j: JokerInfo, mode: Mode): 
   if (mode === 'runs') findRuns();
   else if (mode === 'sets') findSets();
   else if (mode === 'pairs') findPairs();
-  else { findRuns(); findSets(); }
+  else { findSets(); findRuns(); } // auto: sets (terțe) first, then runs, then the rest by colour
   const leftovers = rest.slice().sort((a, b) => { const x = key(a, j), y = key(b, j); return x.c - y.c || x.n - y.n; });
   if (leftovers.length) groups.push(leftovers);
   return pack(groups, cols, size, true);

@@ -211,7 +211,7 @@ export function GameTable() {
   // ------------------------------------------------------------ actions
   const doDiscard = useCallback((tile: number | null) => {
     if (tile === null) { toast(t('select_tile')); return false; }
-    if (!canDiscard) return false;
+    if (!canDiscard) { toast(!myTurn ? t('not_your_turn_msg') : v.phase === 'WAITING_FOR_DRAW' ? t('draw_first') : t('select_tile')); return false; }
     if (isRealJoker(tile, v.joker) && settings.confirmJoker && cfg.confirmJokerDiscard && !confirm(t('confirm_joker'))) return false;
     const sent = act({ type: 'discard', tile }); set({ selected: [] }); return sent;
   }, [canDiscard, v.joker, settings.confirmJoker]);
@@ -305,7 +305,7 @@ export function GameTable() {
 
   // ------------------------------------------------------------ geometry
   const P = SPOT_POS(Wc, H);
-  const cx = Wc / 2, feltTop = 66, feltBottom = H - 270;
+  const cx = Wc / 2, feltTop = 66, feltBottom = H - 292;
   const cy = (feltTop + feltBottom) / 2;
   const discardSpot = (sp: Spot, count: number): [number, number] => {
     if (count === 2) return sp === 'bottom' ? [cx + 300, cy + 10] : [cx - 380, cy - 10];
@@ -320,7 +320,7 @@ export function GameTable() {
     <div className={`table-root theme-${settings.theme} ${qualityClass} ${settings.highContrast ? 'hc' : ''} ${settings.reducedMotion || settings.skipAnim ? 'rm' : ''}`}>
       <div className="table-canvas" ref={canvas} style={{ width: Wc, height: H, transform: `translate(-50%, -50%) scale(${fit.s})` }}>
         <div className="wood-frame" />
-        <div className="felt" style={{ top: feltTop, bottom: 255 }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
+        <div className="felt" style={{ top: feltTop, bottom: 277 }}><div className="felt-logo">Gagiu's<br />WorkArt</div></div>
 
         {/* toolbar */}
         <div className="toolbar">
@@ -349,9 +349,11 @@ export function GameTable() {
           if (isBottom) return null; // the local player's badge lives in the rack area below
           return (
             <div key={s.seat}>
-              <HiddenRack spot={sp} count={s.tiles} x={ax} y={ay} w={Wc} />
+              {settings.theme !== 'arena' && <HiddenRack spot={sp} count={s.tiles} x={ax} y={ay} w={Wc} />}
               <div className={`seat-badge spot-${sp} ${v.current === s.seat && v.phase.startsWith('WAITING') ? 'current' : ''} ${s.status !== 'ACTIVE' ? 'out' : ''}`} style={{ left: ax, top: ay }}>
                 <PlayerAvatar pid={member?.pid ?? null} name={s.name} isBot={s.isBot} />
+                <span className="star-badge" title="Runde câștigate">{s.stats.roundsWon}</span>
+                <span className="tiles-badge" title="Piese">{s.tiles}</span>
                 <div className="sb-name">{s.name}{member?.isHost ? ' ♛' : ''}</div>
                 <div className="sb-score">{s.score}</div>
                 {s.status !== 'ACTIVE' && <div className="sb-tag">{t('eliminated')}</div>}
@@ -386,6 +388,7 @@ export function GameTable() {
             <span className="lbl gold">{t('joker')}</span>
             <span className={`jk c-${['red', 'blue', 'yellow', 'black'][v.joker.color]}`}>{v.joker.num}<small>{COLOR_SYMBOL[v.joker.color]}</small></span>
           </div>
+          {cfg.corner?.enabled && <div className={`corner-pot ${v.pot ? 'full' : ''}`} title={t('corner')}><span className="lbl">{t('corner')}</span><b>{v.pot}</b></div>}
           {cfg.pass.enabled && (
             <div className={`pass-area ${v.pass.active ? 'active' : ''}`}>
               {v.pass.tiles.map((id) => <Tile key={id} id={id} joker={v.joker} w={44} h={60} />)}
@@ -401,12 +404,11 @@ export function GameTable() {
         {historySeat !== null && <HistoryBar v={v} seat={historySeat} onClose={() => set({ historySeat: null })} />}
 
         {/* local player area */}
-        <div className="me-area" style={{ top: H - 255, width: Wc }}>
+        <div className="me-area" style={{ top: H - 277, width: Wc }}>
           <div className="me-left">
             <MyBadge v={v} seat={perspective} />
             <TurnTimer deadline={v.turnDeadline} total={cfg.turnSeconds} paused={v.paused} />
-            {cfg.pauseVote.enabled && me && <button className="small-btn" onClick={() => send({ t: 'vote', kind: v.paused ? 'resume' : 'pause' })} data-nav="btn">{v.paused ? t('resume') : t('request_pause')}</button>}
-            {me && <button className="small-btn" onClick={() => send({ t: 'vote', kind: 'save' })} data-nav="btn">{t('save_match')}</button>}
+            {me && <TableMenu v={v} cfg={cfg} />}
           </div>
           {me ? (
             <Rack joker={v.joker} scale={fit.get} onDropDiscard={(id) => doDiscard(id)} focusIndex={focus} heldIndex={held} hintTiles={hintTiles} />
@@ -456,6 +458,25 @@ export function GameTable() {
       {settings.diagnostics && <Diagnostics />}
       <div className="rotate-overlay"><div className="rot-icon">⟳</div><h2>{t('rotate')}</h2><p>{t('rotate_desc')}</p></div>
       {seatAt('bottom') < 0 && null}
+    </div>
+  );
+}
+
+/** Pause / draw / save requests grouped in one compact menu (keeps the rack column uncluttered). */
+function TableMenu({ v, cfg }: { v: GameView; cfg: RoomConfig }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const pick = (kind: 'pause' | 'resume' | 'draw' | 'save') => { send({ t: 'vote', kind }); setOpen(false); };
+  return (
+    <div className="table-menu">
+      <button className="small-btn" onClick={() => setOpen(!open)} data-nav="btn" aria-expanded={open}>☰ {t('lobby')}</button>
+      {open && (
+        <div className="table-menu-pop" role="menu">
+          {cfg.pauseVote.enabled && <button onClick={() => pick(v.paused ? 'resume' : 'pause')}>{v.paused ? '▶ ' + t('resume') : '⏸ ' + t('request_pause')}</button>}
+          {cfg.drawVote !== false && <button onClick={() => pick('draw')}>🤝 {t('request_draw')}</button>}
+          <button onClick={() => pick('save')}>💾 {t('save_match')}</button>
+        </div>
+      )}
     </div>
   );
 }

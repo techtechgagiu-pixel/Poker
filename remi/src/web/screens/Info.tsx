@@ -13,13 +13,13 @@ export function SettingsPage() {
 /** Live theme previews: each card renders the real felt/wood layers of a theme. */
 function ThemePreview() {
   const t = useT(); const s = useStore((x) => x.settings); const setS = useStore((x) => x.setSettings);
-  const themes = ['walnut', 'mahogany', 'black', 'oak', 'midnight'] as const;
+  const themes = ['arena', 'walnut', 'mahogany', 'black', 'oak', 'midnight'] as const;
   return (
     <div><h3>{t('themes')}</h3>
       <div className="theme-grid">{themes.map((th) => (
         <button key={th} className={`theme-card theme-${th} ${s.theme === th ? 'active' : ''}`} onClick={() => setS({ theme: th })}>
           <div className="tp-wood"><div className="tp-felt"><Tile id={6} w={26} h={36} /><Tile id={33} w={26} h={36} /><Tile id={104} w={26} h={36} /></div></div>
-          <span>{t(('theme_' + th) as any)}</span>
+          <span>{th === 'arena' ? 'Arena' : t(('theme_' + th) as any)}</span>
         </button>
       ))}</div>
     </div>

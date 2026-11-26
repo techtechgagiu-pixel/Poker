@@ -141,6 +141,11 @@ async function playTurn(p) {
       if (!dragged) ok('drag & drop from the left discard stack', false, 'no eligible discard occurred');
     }
 
+    // live tables list shows this match (spectating only)
+    const live = await others[0].page.evaluate(async () => (await (await fetch('/api/live')).json()).tables);
+    const mine = live.find((x) => x.code === code);
+    ok('match appears in "Mese live" with players and scores (no hands)', !!mine && mine.status === 'PLAYING' && mine.players.length === 4 && !JSON.stringify(live).includes('hand'));
+
     // discard history bar
     await A.page.locator('.discard-stack').first().click();
     const hb = await A.page.locator('.history-bar').isVisible();

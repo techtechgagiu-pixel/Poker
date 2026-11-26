@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { defaultConfig } from '../src/engine/config';
-import { newMatch, startRound, draw, discard, activatePass, declareAtu, close, tileLocations, GameState, checkClose, canTakeDiscard, pause, resume } from '../src/engine/game';
+import { newMatch, startRound, draw, discard, activatePass, declareAtu, close, tileLocations, GameState, checkClose, canTakeDiscard, pause, resume, agreeDraw, cornerEligible } from '../src/engine/game';
 import { seededRng, isRealJoker, tileFace } from '../src/engine/tiles';
 import { buildView } from '../src/engine/view';
 import { decideDraw, decideDiscard } from '../src/engine/bot';
@@ -88,8 +88,8 @@ describe('turns', () => {
     // seat 3 can take seat 2's discard, but not seat 0's
     expect(g.lastDiscardSeat).toBe(s2);
   });
-  it('exhausted draw pile ends the round as a draw without penalties', () => {
-    const { g, cfg } = fresh(7);
+  it('exhausted draw pile ends the round as a draw without penalties (corner off)', () => {
+    const { g, cfg } = fresh(7); cfg.corner.enabled = false;
     let guard = 0;
     while (g.phase !== 'ROUND_RESULT' && guard++ < 500) {
       const s = g.current;
@@ -120,8 +120,8 @@ describe('closing and scoring', () => {
     setIndicator(g, t(Y, 4, 1));
     return { g, cfg };
   }
-  it('normal win without joker: opponents lose 10, winner unchanged', () => {
-    const { g, cfg } = setup();
+  it('normal win without joker: opponents lose 10, winner unchanged (collect off)', () => {
+    const { g, cfg } = setup(); cfg.winnerCollects = false;
     const extra = t(Y, 12, 1);
     rig(g, g.starter, [...winning, extra]);
     conserve(g);
@@ -133,7 +133,7 @@ describe('closing and scoring', () => {
     conserve(g);
   });
   it('doubles closed by discarding a real joker costs 30', () => {
-    const { g, cfg } = setup(12);
+    const { g, cfg } = setup(12); cfg.winnerCollects = false;
     const pairs = [t(R, 1), t(R, 1, 1), t(B, 3), t(B, 3, 1), t(Y, 7), t(Y, 7, 1), t(K, 7), t(K, 7, 1), t(R, 10), t(R, 10, 1), t(B, 12), t(B, 12, 1), t(Y, 13), t(Y, 13, 1)];
     const joker = t(Y, 5);
     rig(g, g.starter, [...pairs, joker]);
@@ -378,5 +378,78 @@ describe('training scenarios', () => {
         if (sc === 'closeJoker') expect(isRealJoker(c!.tile, g.joker)).toBe(true);
       }
     }
+  });
+});
+
+describe('cumul and colț (corner pot)', () => {
+  const win = [t(R, 1), t(R, 2), t(R, 3), t(R, 4), t(B, 5), t(B, 6), t(B, 7), t(Y, 9), t(B, 9), t(K, 9), t(K, 11), t(K, 12), t(K, 13), t(R, 9)];
+  const pairs = [t(R, 1), t(R, 1, 1), t(B, 3), t(B, 3, 1), t(Y, 7), t(Y, 7, 1), t(K, 7), t(K, 7, 1), t(R, 10), t(R, 10, 1), t(B, 12), t(B, 12, 1), t(Y, 13), t(Y, 13, 1)];
+  function mk(seed: number) {
+    const { g, cfg } = fresh(seed);
+    const old = g.indicator; const id = t(Y, 4, 1);
+    for (const arr of [g.drawPile, ...g.hands]) { const i = arr.indexOf(id); if (i >= 0) { arr[i] = old; break; } }
+    g.indicator = id; g.joker = { color: Y, num: 5 };
+    return { g, cfg };
+  }
+  it('winner collects the points the opponents lost', () => {
+    const { g, cfg } = mk(61);
+    rig(g, g.starter, [...win, t(Y, 12, 1)]);
+    const r = close(g, cfg, g.starter, t(Y, 12, 1), 0);
+    expect(r.collected).toBe(30);
+    g.seats.forEach((s) => expect(s.score).toBe(s.seat === g.starter ? 130 : 90));
+    conserve(g);
+  });
+  it('only points actually lost are collected (opponent at 4 loses 4)', () => {
+    const { g, cfg } = mk(62);
+    const o = (g.starter + 1) % 4; g.seats[o].score = 4;
+    rig(g, g.starter, [...win, t(Y, 12, 1)]);
+    const r = close(g, cfg, g.starter, t(Y, 12, 1), 0);
+    expect(r.collected).toBe(24);
+    expect(r.eliminated).toContain(o);
+  });
+  it('agreed draw: each player puts the corner amount aside; a plain close does not take it', () => {
+    const { g, cfg } = mk(63);
+    agreeDraw(g, cfg, 0);
+    expect(g.result!.drawReason).toBe('agreed');
+    expect(g.pot).toBe(20);
+    g.seats.forEach((s) => expect(s.score).toBe(95));
+    startRound(g, cfg, seededRng(5), 0);
+    const old = g.indicator; const id = t(Y, 4, 1);
+    for (const arr of [g.drawPile, ...g.hands]) { const i = arr.indexOf(id); if (i >= 0) { arr[i] = old; break; } }
+    g.indicator = id; g.joker = { color: Y, num: 5 };
+    rig(g, g.starter, [...win, t(Y, 12, 1)]);
+    const r = close(g, cfg, g.starter, t(Y, 12, 1), 0);
+    expect(r.potWon).toBe(0); expect(g.pot).toBe(20);
+    conserve(g);
+  });
+  it('a special close (doubles) takes the whole corner', () => {
+    const { g, cfg } = mk(64);
+    g.pot = 15;
+    rig(g, g.starter, [...pairs, t(Y, 12, 1)]);
+    const r = close(g, cfg, g.starter, t(Y, 12, 1), 0);
+    expect(r.category).toBe('doubles'); expect(r.potWon).toBe(15); expect(g.pot).toBe(0);
+    expect(g.seats[g.starter].score).toBe(100 + 45 + 15);
+  });
+  it('closing by discarding a joker takes the corner; disabled corner never collects or charges', () => {
+    const { g, cfg } = mk(65);
+    g.pot = 10;
+    rig(g, g.starter, [...win, t(Y, 5)]);
+    const r = close(g, cfg, g.starter, t(Y, 5), 0);
+    expect(r.jokerDiscard).toBe(true); expect(r.potWon).toBe(10);
+    const b = mk(66); b.cfg.corner.enabled = false;
+    agreeDraw(b.g, b.cfg, 0);
+    expect(b.g.pot).toBe(0); b.g.seats.forEach((s) => expect(s.score).toBe(100));
+  });
+  it('custom corner amount; exhausted pile also feeds the corner', () => {
+    const { g, cfg } = mk(67); cfg.corner.amount = 7;
+    let guard = 0;
+    while (g.phase !== 'ROUND_RESULT' && guard++ < 500) { const s = g.current; if (g.phase === 'WAITING_FOR_DRAW') draw(g, cfg, s, 'pile', 0); discard(g, cfg, s, g.hands[s].at(-1)!, 0); }
+    expect(g.result!.drawReason).toBe('pile'); expect(g.pot).toBe(28);
+  });
+  it('closing after activating PASS takes the corner', () => {
+    expect(cornerEligible(defaultConfig(), 'normalPlain', false, true)).toBe(true);
+    expect(cornerEligible(defaultConfig(), 'normalPlain', false, false)).toBe(false);
+    expect(cornerEligible(defaultConfig(), 'color', false, false)).toBe(true);
+    expect(cornerEligible(defaultConfig(), 'grand', false, false)).toBe(false);
   });
 });

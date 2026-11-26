@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0 — 2026-11-26
+- **Cumul**: punctele pierdute de adversari se adună la câștigător (configurabil).
+- **Colț**: la fiecare remiză/refacere fiecare pune N puncte deoparte (N configurabil, opțional); colțul îl ia cine închide cu joker aruncat, Culoare, Duble sau după PASS (bife separate, Grand opțional).
+- **Solicită remiză** prin vot; acțiunile mesei (pauză, remiză, salvare) grupate în meniul „☰ Masa”.
+- **Mese live**: listă publică de mese în desfășurare, intrare ca spectator.
+- **Tema Arena** (implicită, artă originală): pâslă verde cu grilă, rame-scut aurite cu camera video în interior (mărite când camera e pornită), insigne cu stea, piese cu disc colorat, suport din lemn deschis cu stâlpi, animații de aruncare cu înclinare și scânteie.
+- Jokerul fals afișează doar steaua.
+- Ambianță: **valuri** și **ploaie**.
+- Suport: piesele se **inserează** între vecini (5 7 + 6 → 5 6 7) în loc să facă schimb; zonă mare de aruncare; mesaj clar când aruncarea nu e permisă.
+
 ## 1.0.0 — 2026-11-26 (producție: https://remi.noventra.ro)
 ### Adăugat
 - Motor de joc: 106 piese cu ID unic, Atu/joker dinamic, jokeri falși, validator exhaustiv memoizat, toate categoriile (Culoare independentă de formații), prioritate configurabilă, multiplicator joker, PASS, Arătare atu, punctaj descrescător, eliminare, pachet epuizat.

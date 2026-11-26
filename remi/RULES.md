@@ -8,7 +8,7 @@ Toate valorile marcate *(config)* sunt setabile de gazdă la crearea mesei; sunt
 ## 2. Atu (indicator) și jokeri
 - La începutul rundei se alege aleator (CSPRNG, server) o piesă **numerotată** = **Atu**.
 - **Jokerul real** = numărul următor, aceeași culoare (13 → 1). Ambele exemplare sunt jokeri reali (wildcard).
-- **Jokerii falși** nu sunt wildcard: valorează exact piesa-joker (culoarea și numărul jokerului real).
+- **Jokerii falși** (piesa cu stea ★, fără număr imprimat) nu sunt wildcard: valorează exact piesa-joker (culoarea și numărul jokerului real).
 - Un joker real poate fi folosit și la valoarea lui naturală (o substituție a propriei celule).
 
 ## 3. Împărțire și ture
@@ -46,6 +46,18 @@ Jokerii reali pot înlocui orice piesă lipsă.
 ## 6. Punctaj descrescător
 Start 100 *(config)*. Câștigătorul rundei nu pierde; ceilalți activi pierd penalizarea. ≤0 → eliminat (afișat 0), rămâne spectator. Locul eliminatului nu e completat cu bot. Partida continuă până rămâne un jucător; dacă toți adversarii sunt eliminați simultan, câștigătorul rundei câștigă partida.
 
+## 6b. Cumul la câștigător *(config `winnerCollects`, implicit DA)*
+Punctele pierdute de adversari la o închidere se **adună la cel care a închis**. Se adună doar ce a pierdut efectiv fiecare (un adversar cu 4 puncte, penalizat cu 10, contribuie 4 și este eliminat). Câștigătorul poate depăși punctajul inițial.
+
+## 6c. Colț *(config `corner`, implicit activ, 5 puncte)*
+- La fiecare **refacere a jocului** — remiză prin vot sau pachet epuizat — fiecare jucător activ pune **N puncte deoparte** (N setabil, 0–1000; opțiunea „Joc cu colț” poate fi dezactivată).
+- Colțul se acumulează de la o refacere la alta și **se ia întreg** de cel care închide cu o specială. Implicit: închidere cu **joker aruncat**, **Culoare**, **Duble**, sau după ce **a activat PASS** în runda respectivă. Grand se poate bifa separat. Fiecare variantă e o bifă separată.
+- Dacă plata la colț aduce un jucător la ≤0, acesta este eliminat (ca la orice altă pierdere de puncte).
+- *Interpretare documentată:* „sau PASS” = jucătorul care a activat PASS în acea rundă și apoi închide (cu orice categorie validă).
+
+## 6d. Remiză prin vot *(config `drawVote`, implicit activă)*
+Orice jucător activ poate cere „Solicită remiză”; toți oamenii activi conectați trebuie să accepte (boții acceptă automat). Runda se încheie fără câștigător și se reface (cu plata la colț, dacă e activ).
+
 ## 7. PASS (implicit activ)
 - Disponibil **doar** când ai **ambii jokeri reali** în momentul aruncării (un joker fals nu contează). Butonul PASS apare numai atunci.
 - Pui unul dintre jokeri în zona PASS (blocat, nu mai poate fi folosit), tura se încheie, celălalt rămâne la tine.
@@ -57,6 +69,9 @@ Cine are a doua piesă identică cu Atu o poate arăta înainte să-și termine 
 
 ## 9. Alte reguli de masă *(config)*
 Spectatori, chat, voce, video, pauză prin vot (aprobare unanimă a oamenilor activi conectați, vot 15 s, pauză max. 5 min, 2 cereri/jucător), timp de reconectare (15 s) și preluare de către bot, pauză între runde (8 s), confirmare la aruncarea jokerului, dificultatea boților, completare cu boți.
+
+## 9b. Mese live *(config `listed`, implicit DA)*
+Mesele în desfășurare apar în lista „Mese live”; oricine poate intra ca spectator (doar informații publice: scoruri, piese aruncate, Atu, PASS — niciodată piesele ascunse). Gazda poate scoate masa din listă.
 
 ## 10. Presetări
 Remy Pro Custom (implicit, tot ce e mai sus) · Okey clasic (fără PASS, doar normal + duble) · Rapid (15 s, start 50) · Doar normal · presetări proprii salvate local.

@@ -17,6 +17,7 @@ export interface GameView {
   indicator: number;
   joker: JokerInfo;
   pile: number;
+  pot: number;
   seats: PublicSeat[];
   /** full public discard histories (discarded tiles are public) */
   discards: number[][];
@@ -56,7 +57,7 @@ export function buildView(g: GameState, cfg: RoomConfig, seat: number | null): G
   // Result hands are revealed only for the winner (public winning reveal).
   return {
     phase: g.phase, version: g.version, round: g.round, current: g.current, starter: g.starter,
-    indicator: g.indicator, joker: g.joker, pile: g.drawPile.length,
+    indicator: g.indicator, joker: g.joker, pile: g.drawPile.length, pot: g.pot ?? 0,
     seats: g.seats.map((s) => ({ seat: s.seat, name: s.name, isBot: s.isBot, score: Math.max(0, s.score), status: s.status,
       tiles: g.hands[s.seat].length, discardCount: g.discards[s.seat].length, discardTop: g.discards[s.seat].at(-1) ?? null, stats: s.stats })),
     discards: g.discards.map((d) => d.slice()),

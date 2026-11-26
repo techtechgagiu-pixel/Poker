@@ -50,6 +50,7 @@ export function Home() {
           </form>
         </div>
         <nav className="menu-grid">
+          <Item to="/live" icon="📺" label={t('menu_live')} />
           <Item to="/create" icon="🌐" label={t('menu_online')} />
           <Item to="/training" icon="🎯" label={t('menu_training')} />
           <Item to="/friends" icon="🤝" label={t('menu_friends')} />

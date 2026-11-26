@@ -13,6 +13,7 @@ async function player(browser, name) {
   return { ctx, page, name };
 }
 const sendRaw = (page, msg) => page.evaluate((m) => window.__remiSend(m), msg);
+const menu = async (page, label) => { await page.locator('.table-menu > button').click(); await page.locator('.table-menu-pop button', { hasText: label }).click(); };
 
 (async () => {
   const browser = await chromium.launch();
@@ -43,21 +44,21 @@ const sendRaw = (page, msg) => page.evaluate((m) => window.__remiSend(m), msg);
     ok('rules are locked during the match', (await state(A.page)).room.locked === true);
 
     // ---- pause vote
-    await A.page.getByRole('button', { name: 'Solicită pauză' }).click();
+    await menu(A.page, 'Solicită pauză');
     await B.page.locator('.vote-toast').getByRole('button', { name: 'Da' }).click();
     const p = await waitFor(A.page, (s) => s.game.paused, 8000, 'paused');
     ok('pause approved by all humans freezes the authoritative timer', p.game.turnDeadline === null && p.game.pausedRemaining > 0, `remaining ${p.game.pausedRemaining}ms`);
     const v = p.game.version;
     await sleep(2500);
     ok('no game actions while paused', (await state(A.page)).game.version === v);
-    await A.page.getByRole('button', { name: 'Reia jocul' }).click();
+    await menu(A.page, 'Reia jocul');
     await B.page.locator('.vote-toast').getByRole('button', { name: 'Da' }).click();
     const res = await waitFor(A.page, (s) => !s.game.paused, 8000, 'resumed');
     const left = res.game.turnDeadline - Date.now() - 0;
     ok('resume restores the remaining turn time', Math.abs(left - p.game.pausedRemaining) < 4000, `${Math.round(left / 1000)}s vs ${Math.round(p.game.pausedRemaining / 1000)}s`);
 
     // ---- save & exact restore
-    console.log('save step'); await A.page.getByRole('button', { name: 'Salvează partida' }).click({ timeout: 8000 });
+    await menu(A.page, 'Salvează partida');
     console.log('vote step');
     await B.page.locator('.vote-toast').getByRole('button', { name: 'Da' }).click();
     await waitFor(A.page, (s) => s.room.status === 'SAVED', 8000, 'saved');

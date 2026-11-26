@@ -84,6 +84,24 @@ async function training(browser, scenario, cfgPatch = {}) {
       if (sc === 'color') await page.screenshot({ path: `${OUT}/round-result-color.png` });
       await ctx.close();
     }
+    // ---------- remiză by vote feeds the corner; a special close takes it; winner collects
+    {
+      const { ctx, page } = await training(browser, 'doubles');
+      await page.locator('.table-menu > button').click();
+      await page.locator('.table-menu-pop button', { hasText: 'Solicită remiză' }).click();
+      const d = await waitFor(page, (x) => x.game.phase === 'ROUND_RESULT' && x.game.result.kind === 'draw', 10000, 'agreed draw');
+      ok('remiză by vote ends the round; every player puts 5 in the corner', d.game.result.drawReason === 'agreed' && d.game.pot === 20 && d.game.seats.every((x) => x.score === 95), `pot ${d.game.pot}`);
+      await page.screenshot({ path: `${OUT}/draw-corner.png` });
+      await page.getByRole('button', { name: /^Gata/ }).click();
+      await waitFor(page, (x) => x.game.phase === 'WAITING_FOR_DISCARD' && x.game.me.hand.length === 15 && x.game.round === 2, 15000, 'round 2');
+      const close = page.locator('.controls button', { hasText: 'ÎNCHIDE' });
+      await close.click(); await sleep(200); if (await close.isEnabled()) await close.click();
+      const w = await waitFor(page, (x) => x.game.phase === 'ROUND_RESULT' && x.game.result.kind === 'win', 10000, 'special close');
+      const r = w.game.result;
+      ok('special close (Duble) takes the corner and collects the opponents\' losses', r.category === 'doubles' && r.potWon === 20 && w.game.pot === 0 && r.collected === 3 * r.penalty && w.game.seats[r.winner].score === 95 + r.collected + 20, `collected ${r.collected}, corner ${r.potWon}, score ${w.game.seats[r.winner].score}`);
+      await page.screenshot({ path: `${OUT}/corner-won.png` });
+      await ctx.close();
+    }
     // ---------- disabled category cannot be claimed
     {
       const { ctx, page } = await training(browser, 'color', { disable: ['color'] });

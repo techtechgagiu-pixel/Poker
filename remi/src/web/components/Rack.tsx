@@ -10,7 +10,7 @@ import { Tile } from './Tile';
 import { sfx } from '../sound';
 import type { JokerInfo } from '../../engine/tiles';
 
-export const TILE_DIM = { s: [54, 74], m: [62, 86], l: [70, 96] } as const;
+export const TILE_DIM = { s: [58, 80], m: [66, 92], l: [74, 102] } as const;
 
 interface Props { joker: JokerInfo; scale: () => number; onDropDiscard: (tile: number) => boolean; focusIndex: number | null; heldIndex: number | null; hintTiles: Set<number> }
 
@@ -26,7 +26,7 @@ export function Rack({ joker, scale, onDropDiscard, focusIndex, heldIndex, hintT
   const selected = useStore((s) => s.selected);
   const rows = settings.rackRows; const cols = COLS[rows];
   const base = TILE_DIM[settings.tileSize];
-  const k = rows === 3 ? 0.86 : 1;
+  const k = rows === 3 ? 0.74 : 1;
   const tw = Math.round(base[0] * k), th = Math.round(base[1] * k);
   const gap = settings.tileSpacing;
   const pad = 14;

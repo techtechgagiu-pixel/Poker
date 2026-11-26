@@ -65,6 +65,21 @@ export function RulesEditor({ cfg, onChange, readOnly }: { cfg: RoomConfig; onCh
         {chk(cfg.video, (b) => up((x) => { x.video = b; }), 'opt_video')}
         {chk(cfg.pauseVote.enabled, (b) => up((x) => { x.pauseVote.enabled = b; }), 'opt_pause')}
       </div>
+      <div className="opts">
+        {chk(cfg.winnerCollects !== false, (b) => up((x) => { x.winnerCollects = b; }), 'opt_collect')}
+        {chk(cfg.drawVote !== false, (b) => up((x) => { x.drawVote = b; }), 'opt_drawVote')}
+        {chk(cfg.listed !== false, (b) => up((x) => { x.listed = b; }), 'opt_listed')}
+        {chk(!!cfg.corner?.enabled, (b) => up((x) => { x.corner = { ...x.corner, enabled: b }; }), 'opt_corner', <span className="inline"> · {t('opt_corner_amount')} {num(cfg.corner?.amount ?? 5, (n) => up((x) => { x.corner = { ...x.corner, amount: n }; }), 0, 1000, !cfg.corner?.enabled)}</span>)}
+      </div>
+      {cfg.corner?.enabled && (
+        <div className="opts corner-opts"><span className="muted">{t('opt_corner_takes')}:</span>
+          {chk(cfg.corner.jokerClose, (b) => up((x) => { x.corner.jokerClose = b; }), 'opt_closeByJoker')}
+          {chk(cfg.corner.color, (b) => up((x) => { x.corner.color = b; }), 'cat_color')}
+          {chk(cfg.corner.doubles, (b) => up((x) => { x.corner.doubles = b; }), 'cat_doubles')}
+          {chk(cfg.corner.grand, (b) => up((x) => { x.corner.grand = b; }), 'cat_grand')}
+          {chk(cfg.corner.pass, (b) => up((x) => { x.corner.pass = b; }), 'pass_activated', <span> (PASS)</span>)}
+        </div>
+      )}
       <div className="opts grid2">
         <label>{t('opt_startScore')} {num(cfg.startingScore, (n) => up((x) => { x.startingScore = n; }), 1, 10000)}</label>
         <label>{t('opt_turn')}

@@ -9,6 +9,7 @@ const RoomScreen = lazy(() => import('./screens/Room').then((m) => ({ default: m
 const Info = lazy(() => import('./screens/Info').then((m) => ({ default: m.Info })));
 const Social = lazy(() => import('./screens/Social').then((m) => ({ default: m.Social })));
 const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
+const Live = lazy(() => import('./screens/Live').then((m) => ({ default: m.Live })));
 const SettingsPage = lazy(() => import('./screens/Info').then((m) => ({ default: m.SettingsPage })));
 
 (window as any).__remiStore = useStore;
@@ -38,6 +39,7 @@ export function App() {
   else if (a === 'settings') page = <SettingsPage />;
   else if (['profile', 'friends', 'leaderboard', 'saved', 'trophies', 'stats', 'tournaments', 'notifications'].includes(a)) page = <Social page={a as any} sub={b} />;
   else if (a === 'admin') page = <Admin />;
+  else if (a === 'live') page = <Live />;
   else page = <Home />;
   return (
     <div className={`app theme-${theme} ${hc ? 'hc' : ''}`}>

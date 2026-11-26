@@ -28,7 +28,7 @@ export const PlayerAvatar = memo(function PlayerAvatar({ pid, name, isBot }: { p
   }, [stream, volume, peer?.muted, peer?.volume, speakerId]);
   const initials = isBot ? '🤖' : name.slice(0, 2).toUpperCase();
   return (
-    <div className={`avatar ${speaking ? 'speaking' : ''} ${expanded ? 'expanded' : ''}`} onClick={() => hasVideo && useMedia.setState({ expanded: expanded ? null : pid })}>
+    <div className={`avatar ${speaking ? 'speaking' : ''} ${expanded ? 'expanded' : ''} ${hasVideo ? 'has-video' : ''}`} onClick={() => hasVideo && useMedia.setState({ expanded: expanded ? null : pid })}>
       {hasVideo ? <video ref={vref} autoPlay playsInline muted={isMe} className={isMe && mirror ? 'mirror' : ''} /> : <span>{initials}</span>}
       {!isMe && <audio ref={aref} autoPlay />}
       {member && (member.mic || member.cam) && <span className={`mic-ind ${member.mic ? 'on' : ''}`}>{member.mic ? '🎙' : '📷'}</span>}

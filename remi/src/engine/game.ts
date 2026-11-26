@@ -33,6 +33,13 @@ export interface RoundResult {
   before: number[];
   after: number[];
   eliminated: number[];
+  /** points added to the winner from the opponents' losses (winnerCollects) */
+  collected: number;
+  /** corner pot taken by the winner, or put aside at a draw */
+  potWon: number;
+  potAdded: number;
+  /** why a draw happened */
+  drawReason?: 'pile' | 'agreed';
 }
 
 export interface PublicEvent {
@@ -73,6 +80,8 @@ export interface GameState {
   finishedAt: number | null;
   /** tiles of eliminated players (kept for conservation) */
   outTiles: number[];
+  /** colț: points put aside at draws, taken by a qualifying special close */
+  pot: number;
 }
 
 export class GameError extends Error { constructor(public code: string) { super(code); } }
@@ -106,7 +115,7 @@ export function newMatch(players: { name: string; isBot: boolean }[], cfg: RoomC
     discards: players.map(() => []), lastDiscardSeat: null,
     pass: { active: false, by: null, turnsLeft: null, activations: 0, jokerId: null }, passArea: [], atuDeclaredBy: [],
     firstTurnDone: players.map(() => false), turnDeadline: null, pausedRemaining: null, result: null, nextRoundAt: null,
-    winner: null, events: [], eventSeq: 0, startedAt: now, finishedAt: null, outTiles: [],
+    winner: null, events: [], eventSeq: 0, startedAt: now, finishedAt: null, outTiles: [], pot: 0,
   };
 }
 
@@ -333,16 +342,25 @@ export function close(g: GameState, cfg: RoomConfig, seat: number, discardTile: 
   const jokerDiscard = isRealJoker(discardTile, g.joker);
   const before = g.seats.map((s) => s.score);
   const eliminated: number[] = [];
+  let collected = 0;
   for (const s of activeSeats(g)) {
     if (s === seat) continue;
+    const lost = Math.min(chk.penalty!, Math.max(0, g.seats[s].score));
+    collected += lost;
     g.seats[s].score -= chk.penalty!;
     if (g.seats[s].score <= 0) { g.seats[s].score = 0; g.seats[s].status = 'ELIMINATED'; eliminated.push(s); }
+  }
+  if (!cfg.winnerCollects) collected = 0;
+  g.seats[seat].score += collected;
+  let potWon = 0;
+  if (cfg.corner.enabled && g.pot > 0 && cornerEligible(cfg, chk.category!, jokerDiscard, g.pass.by === seat)) {
+    potWon = g.pot; g.seats[seat].score += potWon; g.pot = 0;
   }
   const st = g.seats[seat].stats;
   st.roundsWon++; st.categories[chk.category!] = (st.categories[chk.category!] ?? 0) + 1;
   if (jokerDiscard) st.jokerCloses++;
   g.result = { kind: 'win', winner: seat, category: chk.category!, formations: chk.formations!, hand: h.slice(), discard: discardTile,
-    jokerDiscard, penalty: chk.penalty!, before, after: g.seats.map((s) => s.score), eliminated };
+    jokerDiscard, penalty: chk.penalty!, before, after: g.seats.map((s) => s.score), eliminated, collected, potWon, potAdded: 0 };
   ev(g, 'close', seat, { tile: discardTile, data: { category: chk.category, penalty: chk.penalty, hand: h.slice() } });
   for (const s of eliminated) ev(g, 'eliminated', s);
   g.turnDeadline = null;
@@ -352,14 +370,41 @@ export function close(g: GameState, cfg: RoomConfig, seat: number, discardTile: 
   return g.result;
 }
 
-function endRoundDraw(g: GameState, cfg: RoomConfig, now: number) {
-  const sc = g.seats.map((s) => s.score);
-  g.result = { kind: 'draw', winner: null, category: null, formations: [], hand: [], discard: null, jokerDiscard: false, penalty: 0, before: sc, after: sc, eliminated: [] };
+/** Is a close eligible to take the corner pot? */
+export function cornerEligible(cfg: RoomConfig, category: CategoryKey, jokerDiscard: boolean, activatedPass: boolean): boolean {
+  const c = cfg.corner;
+  return (c.jokerClose && jokerDiscard) || (c.color && category === 'color') || (c.doubles && category === 'doubles') || (c.grand && category === 'grand') || (c.pass && activatedPass);
+}
+
+function endRoundDraw(g: GameState, cfg: RoomConfig, now: number, reason: 'pile' | 'agreed' = 'pile') {
+  const before = g.seats.map((s) => s.score);
+  // colț: every active player puts the configured amount aside for the redeal
+  let potAdded = 0; const eliminated: number[] = [];
+  if (cfg.corner.enabled && cfg.corner.amount > 0) {
+    for (const s of activeSeats(g)) {
+      const pay = Math.min(cfg.corner.amount, Math.max(0, g.seats[s].score));
+      g.seats[s].score -= cfg.corner.amount; potAdded += pay;
+      if (g.seats[s].score <= 0) { g.seats[s].score = 0; g.seats[s].status = 'ELIMINATED'; eliminated.push(s); }
+    }
+    g.pot += potAdded;
+  }
+  g.result = { kind: 'draw', winner: null, category: null, formations: [], hand: [], discard: null, jokerDiscard: false, penalty: 0, before,
+    after: g.seats.map((s) => s.score), eliminated, collected: 0, potWon: 0, potAdded, drawReason: reason };
   g.pass = { active: false, by: null, turnsLeft: null, activations: 0, jokerId: null };
-  g.phase = 'ROUND_RESULT';
   g.turnDeadline = null;
+  ev(g, 'draw_round', null, { data: { reason, potAdded } });
+  for (const s of eliminated) { g.outTiles.push(...g.hands[s]); g.hands[s] = []; ev(g, 'eliminated', s); }
+  const act = activeSeats(g);
+  if (act.length <= 1) { finishMatch(g, act[0] ?? null, now); return; }
+  g.phase = 'ROUND_RESULT';
   g.nextRoundAt = now + cfg.nextRoundSeconds * 1000;
-  ev(g, 'draw_round', null);
+}
+
+/** Remiză: all players agreed to end the round as a draw (validated by the room before calling). */
+export function agreeDraw(g: GameState, cfg: RoomConfig, now: number) {
+  if (g.phase !== 'WAITING_FOR_DRAW' && g.phase !== 'WAITING_FOR_DISCARD') throw new GameError('wrong_phase');
+  endRoundDraw(g, cfg, now, 'agreed');
+  g.version++;
 }
 
 /** Tile conservation: every physical tile in exactly one location. */

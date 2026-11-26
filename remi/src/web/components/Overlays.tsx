@@ -37,7 +37,14 @@ export function RoundResult() {
               <div className="jokers-used">{t('jokers_used')}: {r.formations.flatMap((f) => f.jokers).map((j) => `${['🔴', '🔵', '🟡', '⚫'][j.color]} ${j.num || ''}`).join(', ')}</div>
             )}
           </>
-        ) : <h2>{t('round_draw')}</h2>}
+        ) : <h2>{r.drawReason === 'agreed' ? t('draw_agreed') : t('round_draw')}</h2>}
+        {(r.collected > 0 || r.potWon > 0 || r.potAdded > 0) && (
+          <div className="cumul-line">
+            {r.collected > 0 && <span>🪙 {t('collected')}: <b className="gold">+{r.collected}</b></span>}
+            {r.potWon > 0 && <span>🏺 {t('corner_won')}: <b className="gold">+{r.potWon}</b></span>}
+            {r.potAdded > 0 && <span>🏺 {t('corner_added')}: <b>{r.potAdded}</b> · {t('corner')}: <b className="gold">{v.pot}</b></span>}
+          </div>
+        )}
         <table className="score-table">
           <thead><tr><th /><th>{t('score_before')}</th><th>{t('score_after')}</th></tr></thead>
           <tbody>{v.seats.map((s) => (
@@ -88,7 +95,7 @@ export function VoteDialog() {
   const vote = room.vote;
   if (!vote || !vote.needed.includes(you.pid) || vote.yes.includes(you.pid)) return null;
   const by = room.members.find((m) => m.pid === vote.by)?.name;
-  const what = vote.kind === 'pause' ? t('request_pause') : vote.kind === 'resume' ? t('resume') : t('save_match');
+  const what = vote.kind === 'pause' ? t('request_pause') : vote.kind === 'resume' ? t('resume') : vote.kind === 'draw' ? t('request_draw') : t('save_match');
   return (
     <div className="vote-toast" role="alertdialog">
       <b>{by}</b>: {what}?
@@ -176,7 +183,7 @@ export function SettingsForm({ compact }: { compact?: boolean }) {
         {chk('confirmJoker', 'confirm_joker')}
       </fieldset>
       <fieldset><legend>{t('settings_graphics')}</legend>
-        <label>{t('theme')} {sel('theme', [['walnut', t('theme_walnut')], ['mahogany', t('theme_mahogany')], ['black', t('theme_black')], ['oak', t('theme_oak')], ['midnight', t('theme_midnight')]])}</label>
+        <label>{t('theme')} {sel('theme', [['arena', 'Arena'], ['walnut', t('theme_walnut')], ['mahogany', t('theme_mahogany')], ['black', t('theme_black')], ['oak', t('theme_oak')], ['midnight', t('theme_midnight')]])}</label>
         <label>{t('quality')} {sel('quality', [['auto', t('q_auto')], ['performance', t('q_performance')], ['balanced', t('q_balanced')], ['ultra', t('q_ultra')]])}</label>
         <label>{t('fps_pref')} {sel('fps', [['auto', t('fps_auto')], ['60', t('fps_60')], ['120', t('fps_120')]])}</label>
         {chk('reducedMotion', 'reduced_motion')}{chk('highContrast', 'high_contrast')}
@@ -188,7 +195,7 @@ export function SettingsForm({ compact }: { compact?: boolean }) {
       </fieldset>
       <fieldset><legend>{t('settings_audio')}</legend>
         {rng('master', 'master')}{rng('sfx', 'sfx')}{rng('music', 'music')}{rng('voice', 'voice_vol')}{rng('notif', 'notif_vol')}
-        <label>{t('ambient')} {sel('ambient', [['fire', '🔥 Șemineu'], ['lounge', '🎹 Lounge'], ['room', '🪑 Cameră']])}</label>
+        <label>{t('ambient')} {sel('ambient', [['fire', '🔥 Șemineu'], ['waves', '🌊 Valuri'], ['rain', '🌧 Ploaie'], ['lounge', '🎹 Lounge'], ['room', '🪑 Cameră']])}</label>
         {chk('mute', 'mute_all')}
       </fieldset>
       <fieldset><legend>{t('settings_media')}</legend>

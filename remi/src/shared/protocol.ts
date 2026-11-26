@@ -11,7 +11,7 @@ export interface PublicMember {
 
 export interface ChatMsg { id: number; pid: string; name: string; text: string; ts: number; kind: 'text' | 'reaction' | 'system' }
 
-export interface VoteState { kind: 'pause' | 'resume' | 'save'; by: string; yes: string[]; needed: string[]; deadline: number }
+export interface VoteState { kind: 'pause' | 'resume' | 'save' | 'draw'; by: string; yes: string[]; needed: string[]; deadline: number }
 
 export interface RoomView {
   code: string;
@@ -52,7 +52,7 @@ export type ClientMsg =
   | { t: 'react'; emoji: string }
   | { t: 'rack'; layout: (number | null)[] }
   | { t: 'nextReady' }
-  | { t: 'vote'; kind: 'pause' | 'resume' | 'save' }
+  | { t: 'vote'; kind: 'pause' | 'resume' | 'save' | 'draw' }
   | { t: 'voteAnswer'; yes: boolean }
   | { t: 'resumeSaved' }
   | { t: 'rematch' }

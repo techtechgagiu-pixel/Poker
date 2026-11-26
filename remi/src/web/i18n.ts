@@ -58,6 +58,11 @@ const ro = {
   scenario: 'Scenariu', install_title: 'Instalează Remi', offline_banner: 'Deconectat — încercăm reconectarea…', reconnecting: 'Reconectare…',
   maintenance: 'Mentenanță în curs. Partidele noi sunt temporar oprite.', error: 'Eroare', loading: 'Se încarcă…',
   achievement_unlocked: 'Realizare deblocată', themes: 'Teme', theme_walnut: 'Nuc clasic', theme_mahogany: 'Mahon regal', theme_black: 'Black Edition', theme_oak: 'Stejar tradițional', theme_midnight: 'Albastru de noapte',
+  draw_agreed: 'Remiză — runda se reface', collected: 'Puncte adunate de la adversari', corner: 'Colț', corner_won: 'A luat colțul', corner_added: 'Puse la colț',
+  request_draw: 'Solicită remiză', not_your_turn_msg: 'Nu este rândul tău.', draw_first: 'Mai întâi trage o piesă (din pachet sau din stânga).',
+  opt_collect: 'Punctele pierdute de adversari se adună la cel care închide', opt_corner: 'Joc cu colț (la fiecare remiză / refacere se pun puncte deoparte)',
+  opt_corner_amount: 'Puncte la colț', opt_corner_takes: 'Colțul se ia la închidere cu', opt_drawVote: 'Remiză prin vot', opt_listed: 'Apare în lista „Mese live” (spectatori)',
+  menu_live: 'Mese live', live_none: 'Nicio masă live acum.', watch: 'Privește', pass_activated: 'după activarea PASS',
   q_auto: 'Auto', q_performance: 'Performanță', q_balanced: 'Echilibrat', q_ultra: 'Ultra', fps_auto: 'Nativ (auto)', fps_60: '60 FPS', fps_120: 'Până la 120 FPS',
 };
 type Dict = typeof ro;
@@ -117,6 +122,11 @@ const en: Dict = {
   scenario: 'Scenario', install_title: 'Install Remi', offline_banner: 'Disconnected — reconnecting…', reconnecting: 'Reconnecting…',
   maintenance: 'Maintenance in progress. New matches are temporarily disabled.', error: 'Error', loading: 'Loading…',
   achievement_unlocked: 'Achievement unlocked', themes: 'Themes', theme_walnut: 'Classic Walnut', theme_mahogany: 'Royal Mahogany', theme_oak: 'Traditional Oak', theme_midnight: 'Midnight Blue',
+  draw_agreed: 'Draw — round redealt', collected: 'Points collected from opponents', corner: 'Corner', corner_won: 'Took the corner', corner_added: 'Put in the corner',
+  request_draw: 'Request draw', not_your_turn_msg: 'It is not your turn.', draw_first: 'Draw a tile first (pile or left discard).',
+  opt_collect: 'Points lost by opponents go to the closing player', opt_corner: 'Play with corner (points set aside at every draw/redeal)',
+  opt_corner_amount: 'Corner points', opt_corner_takes: 'Corner taken when closing with', opt_drawVote: 'Draw by vote', opt_listed: 'Listed in "Live tables" (spectators)',
+  menu_live: 'Live tables', live_none: 'No live tables right now.', watch: 'Watch', pass_activated: 'after activating PASS',
   q_performance: 'Performance', q_balanced: 'Balanced', fps_auto: 'Native (auto)', fps_120: 'Up to 120 FPS',
 };
 export const dicts = { ro, en };
@@ -131,7 +141,7 @@ const ERR_RO: Record<string, string> = {
   room_not_found: 'Masa nu există.', room_full: 'Masa este plină.', rate_limited: 'Prea multe cereri. Așteaptă puțin.', maintenance: 'Mentenanță: partidele noi sunt oprite.',
   paused: 'Jocul este în pauză.', chat_disabled: 'Chatul este dezactivat.', player_disconnected: 'Un jucător este deconectat.', pause_limit: 'Ai atins limita de pauze.',
   vote_in_progress: 'Un vot este deja în curs.', hints_training_only: 'Sugestiile sunt disponibile doar în antrenament.', tournament_participants_only: 'Doar participanții turneului pot juca aici.',
-  spectators_disabled: 'Spectatorii nu sunt permiși.', login_required: 'Trebuie să fii conectat.', username_taken: 'Numele de utilizator este ocupat.', bad_username: 'Utilizator invalid (3-20 caractere: litere, cifre, _ .).',
+  spectators_disabled: 'Spectatorii nu sunt permiși.', draw_vote_disabled: 'Remiza prin vot este dezactivată.', login_required: 'Trebuie să fii conectat.', username_taken: 'Numele de utilizator este ocupat.', bad_username: 'Utilizator invalid (3-20 caractere: litere, cifre, _ .).',
   invalid_credentials: 'Date de conectare greșite.', user_not_found: 'Utilizatorul nu a fost găsit.', already_exists: 'Cererea există deja.', save_vote_in_progress: 'Vot de salvare în curs.',
 };
 export function errText(code: string, lang: 'ro' | 'en') {

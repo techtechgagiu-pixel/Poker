@@ -49,6 +49,17 @@ export interface RoomConfig {
   pauseVote: { enabled: boolean; voteSeconds: number; maxPauseSeconds: number; maxPerPlayer: number };
   /** Training rooms: assistant hints allowed, stats separate. Forced false in competitive rooms. */
   training: boolean;
+  /** The points lost by the opponents are added to the player who closed. */
+  winnerCollects: boolean;
+  /**
+   * Colț (corner pot): on every redeal after a draw (agreed or exhausted pile) each active player puts `amount` aside.
+   * The whole pot goes to a player who closes with an eligible special.
+   */
+  corner: { enabled: boolean; amount: number; jokerClose: boolean; color: boolean; doubles: boolean; pass: boolean; grand: boolean };
+  /** Players may end the current round as a draw by unanimous vote. */
+  drawVote: boolean;
+  /** Room appears in the public "live tables" list (spectating only; hands stay hidden). */
+  listed: boolean;
 }
 
 export const DEFAULT_CATEGORIES: Record<CategoryKey, CategoryConfig> = {
@@ -85,6 +96,10 @@ export function defaultConfig(): RoomConfig {
     confirmJokerDiscard: true,
     pauseVote: { enabled: true, voteSeconds: 15, maxPauseSeconds: 300, maxPerPlayer: 2 },
     training: false,
+    winnerCollects: true,
+    corner: { enabled: true, amount: 5, jokerClose: true, color: true, doubles: true, pass: true, grand: false },
+    drawVote: true,
+    listed: true,
   };
 }
 
@@ -158,6 +173,13 @@ export function sanitizeConfig(input: unknown): RoomConfig {
     maxPauseSeconds: clampInt(pv.maxPauseSeconds, 30, 3600, 300), maxPerPlayer: clampInt(pv.maxPerPlayer, 0, 20, 2),
   };
   out.training = bool(i.training, false);
+  out.winnerCollects = bool(i.winnerCollects, d.winnerCollects);
+  const co = i.corner ?? {};
+  out.corner = { enabled: bool(co.enabled, d.corner.enabled), amount: clampInt(co.amount, 0, 1000, d.corner.amount),
+    jokerClose: bool(co.jokerClose, d.corner.jokerClose), color: bool(co.color, d.corner.color), doubles: bool(co.doubles, d.corner.doubles),
+    pass: bool(co.pass, d.corner.pass), grand: bool(co.grand, d.corner.grand) };
+  out.drawVote = bool(i.drawVote, d.drawVote);
+  out.listed = bool(i.listed, d.listed);
   return out;
 }
 

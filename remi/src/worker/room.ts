@@ -5,7 +5,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { RoomConfig, anyCategoryEnabled, defaultConfig, sanitizeConfig } from '../engine/config';
 import {
-  GameError, GameState, activatePass, close, declareAtu, discard, draw, newMatch, pause, resume, startRound, activeSeats, canTakeDiscard,
+  GameError, GameState, activatePass, close, declareAtu, discard, draw, newMatch, pause, resume, startRound, activeSeats, canTakeDiscard, agreeDraw,
 } from '../engine/game';
 import { buildView } from '../engine/view';
 import { decideDiscard, decideDraw, shouldDeclareAtu, thinkDelay } from '../engine/bot';
@@ -46,7 +46,16 @@ export class RemiRoom extends DurableObject<Env> {
   room: RoomData | null = null;
 
   async load(): Promise<RoomData | null> {
-    if (!this.room) this.room = (await this.ctx.storage.get<RoomData>('room')) ?? null;
+    if (!this.room) {
+      this.room = (await this.ctx.storage.get<RoomData>('room')) ?? null;
+      const r = this.room;
+      if (r) {
+        // rooms created before the corner/collect rules: keep their original rules for matches in progress
+        if (r.matchConfig && (r.matchConfig as any).corner === undefined) r.matchConfig = { ...sanitizeConfig({ ...r.matchConfig, winnerCollects: false, corner: { enabled: false } }) };
+        if ((r.config as any).corner === undefined) r.config = sanitizeConfig(r.config);
+        if (r.game && (r.game as any).pot === undefined) r.game.pot = 0;
+      }
+    }
     return this.room;
   }
   async persist() { if (this.room) { this.room.lastActivity = Date.now(); await this.ctx.storage.put('room', this.room); } }
@@ -129,6 +138,11 @@ export class RemiRoom extends DurableObject<Env> {
       connected: humans.length, spectators: humans.filter((m) => m.role === 'spectator').length,
       bots: r.seats.filter((s) => s.kind === 'bot').length, mic: humans.filter((m) => m.mic).length, cam: humans.filter((m) => m.cam).length,
       round: r.game?.round ?? 0, matchNo: r.matchNo,
+      // public info for the live-tables list (no hands, no tokens)
+      listed: r.config.listed !== false && r.config.spectators && r.mode !== 'training' && !r.tournament,
+      host: r.members.find((m) => m.pid === r.hostPid)?.name ?? '',
+      players: r.game ? r.game.seats.map((s) => ({ name: s.name, score: Math.max(0, s.score), bot: s.isBot, out: s.status !== 'ACTIVE' })) : r.members.filter((m) => m.role === 'player').map((m) => ({ name: m.name, score: 0, bot: false, out: false })),
+      pot: r.game?.pot ?? 0,
     };
   }
 
@@ -457,10 +471,12 @@ export class RemiRoom extends DurableObject<Env> {
       m.pauseRequests++;
     }
     if (kind === 'resume' && g.pausedRemaining === null) throw new GameError('not_paused');
-    if (kind === 'save' && !['WAITING_FOR_DRAW', 'WAITING_FOR_DISCARD'].includes(g.phase)) throw new GameError('bad_state');
+    if ((kind === 'save' || kind === 'draw') && !['WAITING_FOR_DRAW', 'WAITING_FOR_DISCARD'].includes(g.phase)) throw new GameError('bad_state');
+    if (kind === 'draw' && !cfg.drawVote) throw new GameError('draw_vote_disabled');
+    if (kind === 'draw' && g.pausedRemaining !== null) throw new GameError('paused');
     const needed = this.humanSeatPids().filter((p) => this.member(p)?.connected);
     r.vote = { kind, by: m.pid, yes: [m.pid], needed, deadline: Date.now() + cfg.pauseVote.voteSeconds * 1000 };
-    this.sys(`${m.name} solicită ${kind === 'pause' ? 'pauză' : kind === 'resume' ? 'reluarea jocului' : 'salvarea partidei'}.`);
+    this.sys(`${m.name} solicită ${kind === 'pause' ? 'pauză' : kind === 'resume' ? 'reluarea jocului' : kind === 'draw' ? 'remiză' : 'salvarea partidei'}.`);
     this.resolveVote();
     return true;
   }
@@ -480,6 +496,12 @@ export class RemiRoom extends DurableObject<Env> {
     if (!v.needed.every((p) => v.yes.includes(p))) return; // bots accept automatically (not in needed)
     const now = Date.now();
     r.vote = null;
+    if (v.kind === 'draw') {
+      agreeDraw(g, cfg, now); r.botAt = null;
+      this.sys(cfg.corner.enabled ? `Remiză acceptată. Fiecare pune ${cfg.corner.amount} puncte la colț (colț: ${g.pot}).` : 'Remiză acceptată. Runda se reface.');
+      this.ctx.waitUntil(this.afterGameChange());
+      return;
+    }
     if (v.kind === 'pause') { pause(g, now); r.pausedUntil = now + cfg.pauseVote.maxPauseSeconds * 1000; this.sys('Joc în pauză.'); }
     else if (v.kind === 'resume') { resume(g, now); r.pausedUntil = null; this.sys('Jocul a fost reluat.'); }
     else {

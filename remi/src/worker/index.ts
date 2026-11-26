@@ -12,6 +12,7 @@ import { secureRng } from '../engine/tiles';
 export { RemiRoom } from './room';
 
 const memLimiter = new Map<string, number[]>();
+let liveCache: { at: number; data: unknown } | null = null;
 async function limited(env: Env, req: Request, bucket: string, max: number, windowMs: number): Promise<boolean> {
   const ip = req.headers.get('cf-connecting-ip') ?? 'local';
   const key = `${bucket}:${ip}`;
@@ -80,6 +81,16 @@ async function api(req: Request, env: Env, url: URL): Promise<Response> {
     const data = await createRoom(env, b, ident);
     if (b.announce && ident.userId && b.mode !== 'training' && b.mode !== 'bots') await announceRoom(env, ident.userId, ident.nickname ?? b.name, data.code).catch(() => null);
     return json(data);
+  }
+  if (path === '/api/live') {
+    // public live tables: ongoing matches whose host allowed listing and spectators (hands are never exposed)
+    if (liveCache && Date.now() - liveCache.at < 15000) return json(liveCache.data);
+    const codes = (await env.DB.prepare('SELECT code FROM rooms_index WHERE created_at > ? ORDER BY created_at DESC LIMIT 60').bind(Date.now() - 2 * 864e5).all<{ code: string }>()).results.map((x) => x.code);
+    const all = await Promise.all(codes.map(async (c) => { try { const r = await doCall(env, c, 'stats'); return r.ok ? ((await r.json()) as any) : null; } catch { return null; } }));
+    const tables = all.filter((x) => x && x.listed && (x.status === 'PLAYING' || x.status === 'LOBBY') && x.connected > 0)
+      .map((x) => ({ code: x.code, status: x.status, host: x.host, round: x.round, spectators: x.spectators, players: x.players, pot: x.pot, mode: x.mode }));
+    liveCache = { at: Date.now(), data: { tables } };
+    return json(liveCache.data);
   }
   const tm = path.match(/^\/api\/tournaments\/([0-9a-f-]{36})\/room\/([0-9a-f-]{36})$/);
   if (tm && req.method === 'POST') {

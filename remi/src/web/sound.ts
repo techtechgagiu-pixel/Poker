@@ -65,7 +65,25 @@ export function updateAmbient() {
   if (ambientNode) ambientNode.stop();
   const c = ac(); const g = c.createGain(); g.gain.value = v * 0.25; g.connect(master!);
   const stops: (() => void)[] = [];
-  if (s.ambient === 'lounge') {
+  if (s.ambient === 'waves') {
+    // surf: low-passed noise whose level and brightness swell slowly, like waves reaching the shore
+    const src = c.createBufferSource(); src.buffer = noiseBuffer(c, 6); src.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+    const ng = c.createGain(); ng.gain.value = 0.35;
+    const lfo = c.createOscillator(); lfo.frequency.value = 0.09; const lg = c.createGain(); lg.gain.value = 0.32; lfo.connect(lg).connect(ng.gain);
+    const lfo2 = c.createOscillator(); lfo2.frequency.value = 0.09; const lf = c.createGain(); lf.gain.value = 450; lfo2.connect(lf).connect(f.frequency);
+    src.connect(f).connect(ng).connect(g); src.start(); lfo.start(); lfo2.start();
+    stops.push(() => { src.stop(); lfo.stop(); lfo2.stop(); });
+  } else if (s.ambient === 'rain') {
+    // steady rain bed (band-passed noise) plus random droplets
+    const src = c.createBufferSource(); src.buffer = noiseBuffer(c, 4); src.loop = true;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000;
+    const ng = c.createGain(); ng.gain.value = 0.28;
+    src.connect(hp).connect(lp).connect(ng).connect(g); src.start(); stops.push(() => src.stop());
+    const iv = window.setInterval(() => { for (let k = 0; k < 3; k++) if (Math.random() < 0.7) click(3000 + Math.random() * 5000, 0.008 + Math.random() * 0.02, 0.06 * v, 'noise', Math.random() * 0.1); }, 110);
+    stops.push(() => clearInterval(iv));
+  } else if (s.ambient === 'lounge') {
     for (const f of [130.8, 196, 246.9]) {
       const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f;
       const lfo = c.createOscillator(); lfo.frequency.value = 0.07 + Math.random() * 0.05; const lg = c.createGain(); lg.gain.value = 0.3;
